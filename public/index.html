@@ -1,46 +1,41 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Gleap Live Ticket Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Gleap Dashboard (Turso Cloud)</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <header>
-    <h1>Gleap Live Ticket Dashboard</h1>
-  </header>
+<h1>Gleap Live Ticket Dashboard</h1>
 
-  <section class="stats-container">
-    <div class="card">
-      <h3>Total Open Tickets</h3>
-      <p id="totalTickets">0</p>
-    </div>
+<div class="top">
+  <div class="box">
+    <h3>Total Tickets</h3>
+    <p id="totalTickets">0</p>
+  </div>
 
-    <div class="card">
-      <h3>Tickets by Plan</h3>
-      <div id="planBreakdown"></div>
-    </div>
-  </section>
+  <div class="box">
+    <h3>Plan Breakdown</h3>
+    <div id="planBreakdown"></div>
+  </div>
+</div>
 
-  <section class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Agent</th>
-          <th>Open Tickets</th>
-          <th>Priority</th>
-          <th>Status</th>
-          <th>Duration</th>
-          <th>Email</th>
-          <th>Plan</th>
-          <th>Tags</th>
-        </tr>
-      </thead>
-      <tbody id="ticketRows"></tbody>
-    </table>
-  </section>
+<table>
+  <thead>
+    <tr>
+      <th>Agent</th>
+      <th>Open Tickets</th>
+      <th>Priority</th>
+      <th>Status</th>
+      <th>Duration</th>
+      <th>User Email</th>
+      <th>Plan</th>
+      <th>Tags</th>
+    </tr>
+  </thead>
+  <tbody id="ticketRows"></tbody>
+</table>
 
-  <script src="dashboard.js"></script>
+<script src="dashboard.js"></script>
 </body>
 </html>
