@@ -1,16 +1,24 @@
 async function load() {
+  // Fetch from Vercel API
   const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
   const data = await res.json();
 
+  // Rows that actually have a ticket
   const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
 
-  // Total Open Tickets
-  document.getElementById("totalTickets").innerText = valid.length;
+  // ---------- TOTAL TICKETS (sum of open tickets) ----------
+  const totalTickets = valid.reduce(
+    (sum, r) => sum + Number(r.agent_open_ticket || 0),
+    0
+  );
+  document.getElementById("totalTickets").innerText = totalTickets;
 
-  // Tickets by Plan
+  // ---------- PLAN BREAKDOWN (weighted by open tickets) ----------
   const plan = {};
   valid.forEach(r => {
-    plan[r.plan_type] = (plan[r.plan_type] || 0) + 1;
+    const key = r.plan_type || "UNKNOWN_PLAN";
+    const count = Number(r.agent_open_ticket || 0);
+    plan[key] = (plan[key] || 0) + count;
   });
 
   const planDiv = document.getElementById("planBreakdown");
@@ -19,11 +27,14 @@ async function load() {
     planDiv.innerHTML += `<p>${k}: ${v}</p>`;
   });
 
-  // Table rows
+  // ---------- TABLE (valid rows first, then empty ones) ----------
+  const empty = data.filter(r => !r.ticket_id || r.ticket_id === "-");
+  const ordered = [...valid, ...empty];
+
   const tbody = document.getElementById("ticketRows");
   tbody.innerHTML = "";
 
-  valid.forEach(r => {
+  ordered.forEach(r => {
     tbody.innerHTML += `
       <tr>
         <td>${r.agent_name}</td>
@@ -33,7 +44,7 @@ async function load() {
         <td>${r.time_open_duration}</td>
         <td>${r.user_email}</td>
         <td>${r.plan_type}</td>
-        <td>${r.tags || ""}</td>
+        <td>${r.tags}</td>
       </tr>
     `;
   });
