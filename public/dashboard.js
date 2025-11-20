@@ -4,7 +4,7 @@ async function loadDashboard() {
     showLoading(true);
     
     try {
-        const res = await fetch("/api/agents");
+        const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
         const data = await res.json();
 
         allTickets = data;
