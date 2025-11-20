@@ -1,5 +1,13 @@
 import { createClient } from "@libsql/client";
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb"
+    }
+  }
+};
+
 const turso = createClient({
   url: "https://gleaplive-bob-the-builderrr.aws-us-east-1.turso.io",
   authToken: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjM2MTE3MDEsImlkIjoiY2Y3ZDVlZTEtZDg4ZC00OWFmLWFiZWItNDEwNmI1Zjk4NWE4IiwicmlkIjoiMGVjMzNmNGYtMTU5ZC00NWQ5LWFmNzctNTgzODlkNmUwMjg1In0.3Gi7P4w6J1_Us0Q-vLMmcYeawbEsB_DfBxOsINX5DExQJa7Cc4cJFNhwz-ftf0hiRaxJUy_Jdsm9wy9qXNEMDQ"
@@ -11,9 +19,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rows = req.body.rows;
+    const rows = req.body?.rows;
+
     if (!rows || !Array.isArray(rows)) {
-      return res.status(400).json({ error: "Invalid input" });
+      return res.status(400).json({ error: "Invalid or missing rows" });
     }
 
     for (const r of rows) {
@@ -48,19 +57,20 @@ export default async function handler(req, res) {
             refreshed_at = datetime('now');
         `,
         args: [
-          r.id, r.ticket_id, r.agent_name, r.agent_id, r.ticket_status,
-          r.ticket_type, r.priority, r.plan_type, r.user_email, r.user_name,
-          r.updated_at, r.sla_breached, r.has_agent_reply, r.tags,
-          r.latest_comment_created_at, r.time_open_duration,
-          r.agent_open_ticket
+          r.id, r.ticket_id, r.agent_name, r.agent_id,
+          r.ticket_status, r.ticket_type, r.priority,
+          r.plan_type, r.user_email, r.user_name,
+          r.updated_at, r.sla_breached, r.has_agent_reply,
+          r.tags, r.latest_comment_created_at,
+          r.time_open_duration, r.agent_open_ticket
         ]
       });
     }
 
-    res.status(200).json({ message: "Success" });
+    return res.status(200).json({ ok: true, updated: rows.length });
 
   } catch (err) {
-    console.error("Upsert ERROR:", err);
-    res.status(500).json({ error: "Database upsert failed" });
+    console.error("INSERT ERROR:", err);
+    return res.status(500).json({ error: "Upsert failed", details: String(err) });
   }
 }
