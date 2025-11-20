@@ -20,9 +20,10 @@ export default async function handler(req, res) {
       await turso.execute({
         sql: `
           INSERT INTO open_tickets (
-            id, ticket_id, agent_name, agent_id, ticket_status, ticket_type, priority,
-            plan_type, user_email, user_name, updated_at, sla_breached, has_agent_reply,
-            tags, latest_comment_created_at, time_open_duration, agent_open_ticket, refreshed_at
+            id, ticket_id, agent_name, agent_id, ticket_status, ticket_type,
+            priority, plan_type, user_email, user_name, updated_at,
+            sla_breached, has_agent_reply, tags, latest_comment_created_at,
+            time_open_duration, agent_open_ticket, refreshed_at
           )
           VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')
@@ -47,10 +48,11 @@ export default async function handler(req, res) {
             refreshed_at = datetime('now');
         `,
         args: [
-          r.id, r.ticket_id, r.agent_name, r.agent_id, r.ticket_status, r.ticket_type,
-          r.priority, r.plan_type, r.user_email, r.user_name, r.updated_at,
-          r.sla_breached, r.has_agent_reply, r.tags, r.latest_comment_created_at,
-          r.time_open_duration, r.agent_open_ticket
+          r.id, r.ticket_id, r.agent_name, r.agent_id, r.ticket_status,
+          r.ticket_type, r.priority, r.plan_type, r.user_email, r.user_name,
+          r.updated_at, r.sla_breached, r.has_agent_reply, r.tags,
+          r.latest_comment_created_at, r.time_open_duration,
+          r.agent_open_ticket
         ]
       });
     }
