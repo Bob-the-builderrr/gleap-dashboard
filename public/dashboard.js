@@ -1,382 +1,316 @@
-// Mock data for demonstration
-const mockData = [
-  {
-    Agent_Name: "Alex Johnson",
-    Agent_Open_Ticket: 5,
-    Priority: "High",
-    Ticket_Status: "In Progress",
-    Time_Open_Duration: "52 minutes",
-    User_Email: "customer1@example.com",
-    Plan_Type: "Enterprise",
-    Tags: "billing,urgent"
-  },
-  {
-    Agent_Name: "Maria Garcia",
-    Agent_Open_Ticket: 3,
-    Priority: "Medium",
-    Ticket_Status: "Open",
-    Time_Open_Duration: "28 minutes",
-    User_Email: "customer2@example.com",
-    Plan_Type: "Professional",
-    Tags: "technical"
-  },
-  {
-    Agent_Name: "David Smith",
-    Agent_Open_Ticket: 7,
-    Priority: "Low",
-    Ticket_Status: "Open",
-    Time_Open_Duration: "15 minutes",
-    User_Email: "customer3@example.com",
-    Plan_Type: "Starter",
-    Tags: "feature-request"
-  },
-  {
-    Agent_Name: "Sarah Williams",
-    Agent_Open_Ticket: 2,
-    Priority: "High",
-    Ticket_Status: "In Progress",
-    Time_Open_Duration: "67 minutes",
-    User_Email: "customer4@example.com",
-    Plan_Type: "Enterprise",
-    Tags: "bug,urgent"
-  },
-  {
-    Agent_Name: "James Brown",
-    Agent_Open_Ticket: 4,
-    Priority: "Medium",
-    Ticket_Status: "Open",
-    Time_Open_Duration: "42 minutes",
-    User_Email: "customer5@example.com",
-    Plan_Type: "Professional",
-    Tags: "question"
-  },
-  {
-    Agent_Name: "Lisa Chen",
-    Agent_Open_Ticket: 6,
-    Priority: "High",
-    Ticket_Status: "In Progress",
-    Time_Open_Duration: "38 minutes",
-    User_Email: "customer6@example.com",
-    Plan_Type: "Enterprise",
-    Tags: "billing"
-  },
-  {
-    Agent_Name: "Michael Taylor",
-    Agent_Open_Ticket: 1,
-    Priority: "Low",
-    Ticket_Status: "Open",
-    Time_Open_Duration: "23 minutes",
-    User_Email: "customer7@example.com",
-    Plan_Type: "Free",
-    Tags: "feedback"
-  },
-  {
-    Agent_Name: "Emily Wilson",
-    Agent_Open_Ticket: 8,
-    Priority: "Medium",
-    Ticket_Status: "In Progress",
-    Time_Open_Duration: "51 minutes",
-    User_Email: "customer8@example.com",
-    Plan_Type: "Professional",
-    Tags: "integration,api"
-  }
-];
+// API endpoint
+const API_URL = "https://gleap-dashboard.vercel.app/api/agents";
 
-// Color mapping for plans
-const planColors = {
-  "Enterprise": "#4361ee",
-  "Professional": "#4cc9f0",
-  "Starter": "#3a0ca3",
-  "Free": "#7209b7"
-};
+let tickets = [];
+let currentSortKey = "Agent_Open_Ticket";
+let currentSortDir = "desc";
 
-// Global variables
-let currentData = [...mockData];
-let currentSort = { column: null, direction: 'asc' };
-let currentFilter = 'all';
+// Convert "2 hours 7 minutes", "19 minutes", "1 days 3 hours" to minutes
+function durationToMinutes(str) {
+  if (!str || typeof str !== "string") return 0;
 
-// Function to parse duration string and return minutes
-function parseDuration(durationStr) {
-  if (!durationStr) return 0;
-  
-  const hoursMatch = durationStr.match(/(\d+)\s*hours?/);
-  const minutesMatch = durationStr.match(/(\d+)\s*minutes?/);
-  
-  let totalMinutes = 0;
-  
-  if (hoursMatch) {
-    totalMinutes += parseInt(hoursMatch[1]) * 60;
-  }
-  
-  if (minutesMatch) {
-    totalMinutes += parseInt(minutesMatch[1]);
-  }
-  
-  // If no hours or minutes found, try to parse as just a number
-  if (totalMinutes === 0) {
-    const numberMatch = durationStr.match(/\d+/);
-    if (numberMatch) {
-      totalMinutes = parseInt(numberMatch[0]);
+  const lower = str.toLowerCase();
+  let days = 0;
+  let hours = 0;
+  let minutes = 0;
+
+  const dayMatch = lower.match(/(\d+)\s*day/);
+  const hourMatch = lower.match(/(\d+)\s*hour/);
+  const minMatch = lower.match(/(\d+)\s*minute/);
+
+  if (dayMatch) days = parseInt(dayMatch[1], 10);
+  if (hourMatch) hours = parseInt(hourMatch[1], 10);
+  if (minMatch) minutes = parseInt(minMatch[1], 10);
+
+  return days * 24 * 60 + hours * 60 + minutes;
+}
+
+function isBreached(row) {
+  const v = row.SLA_Breached;
+  return v === true || v === "true" || v === "TRUE";
+}
+
+// Normalize row so we never get undefined in UI
+function normalizeRow(r) {
+  return {
+    Ticket_ID: r.Ticket_ID ?? "",
+    Agent_Name: r.Agent_Name ?? "",
+    Agent_Open_Ticket: Number(r.Agent_Open_Ticket ?? 0),
+    Ticket_Status: r.Ticket_Status ?? "",
+    Ticket_Type: r.Ticket_Type ?? "",
+    Priority: r.Priority ?? "",
+    Plan_Type: r.Plan_Type ?? "",
+    User_Email: r.User_Email ?? "",
+    User_Name: r.User_Name ?? "",
+    Updated_At: r.Updated_At ?? "",
+    SLA_Breached: r.SLA_Breached ?? "",
+    Has_Agent_Reply: r.Has_Agent_Reply ?? "",
+    Tags: r.Tags ?? "",
+    Latest_Comment_Created_At: r.Latest_Comment_Created_At ?? "",
+    Time_Open_Duration: r.Time_Open_Duration ?? "",
+    refreshed_at: r.refreshed_at ?? ""
+  };
+}
+
+// Stats rendering
+
+function renderStats() {
+  const totalEl = document.getElementById("totalTickets");
+  const totalNoteEl = document.getElementById("totalTicketsNote");
+  const agentsEl = document.getElementById("agentsWithTickets");
+  const slaEl = document.getElementById("slaBreachedCount");
+  const avgEl = document.getElementById("avgAge");
+  const lastRefreshedEl = document.getElementById("lastRefreshed");
+
+  const openTickets = tickets.length;
+
+  const agents = new Set(
+    tickets
+      .map(t => t.Agent_Name)
+      .filter(name => name && name !== "UNASSIGNED")
+  );
+
+  const slaCount = tickets.filter(isBreached).length;
+
+  const durations = tickets.map(t => durationToMinutes(t.Time_Open_Duration));
+  const avgMinutes =
+    durations.length > 0
+      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+      : 0;
+
+  totalEl.textContent = openTickets;
+  totalNoteEl.textContent = `Across ${agents.size || 0} active agent(s)`;
+
+  agentsEl.textContent = agents.size;
+  slaEl.textContent = slaCount;
+  avgEl.textContent =
+    avgMinutes < 60
+      ? `${avgMinutes} m`
+      : `${Math.floor(avgMinutes / 60)} h ${avgMinutes % 60} m`;
+
+  const now = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata"
+  });
+  lastRefreshedEl.textContent = `Last refreshed: ${now}`;
+}
+
+// Plan breakdown rendering
+
+function renderPlans() {
+  const container = document.getElementById("planBreakdown");
+  container.innerHTML = "";
+
+  const counts = {};
+  tickets.forEach(t => {
+    const key = t.Plan_Type || "UNKNOWN_PLAN";
+    counts[key] = (counts[key] || 0) + 1;
+  });
+
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  entries.forEach(([plan, count]) => {
+    const chip = document.createElement("div");
+    chip.className = "plan-chip";
+
+    const label = document.createElement("span");
+    label.className = "plan-chip-label";
+    label.textContent = plan;
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "plan-chip-count";
+    countSpan.textContent = count;
+
+    chip.appendChild(label);
+    chip.appendChild(countSpan);
+
+    container.appendChild(chip);
+  });
+}
+
+// Table rendering
+
+function clearSortIndicators() {
+  document
+    .querySelectorAll("#ticketTable thead th")
+    .forEach(th => th.classList.remove("sorted-asc", "sorted-desc"));
+}
+
+function applySortIndicator() {
+  const th = document.querySelector(
+    `#ticketTable thead th[data-sort="${currentSortKey}"]`
+  );
+  if (!th) return;
+  th.classList.add(
+    currentSortDir === "asc" ? "sorted-asc" : "sorted-desc"
+  );
+}
+
+function sortTickets() {
+  tickets.sort((a, b) => {
+    const av = a[currentSortKey];
+    const bv = b[currentSortKey];
+
+    // Special case: age
+    if (currentSortKey === "Time_Open_Duration") {
+      const am = durationToMinutes(av);
+      const bm = durationToMinutes(bv);
+      return currentSortDir === "asc" ? am - bm : bm - am;
     }
-  }
-  
-  return totalMinutes;
+
+    // Numeric
+    if (
+      currentSortKey === "Agent_Open_Ticket"
+    ) {
+      const an = Number(av || 0);
+      const bn = Number(bv || 0);
+      return currentSortDir === "asc" ? an - bn : bn - an;
+    }
+
+    // String compare
+    const as = (av ?? "").toString().toLowerCase();
+    const bs = (bv ?? "").toString().toLowerCase();
+
+    if (as < bs) return currentSortDir === "asc" ? -1 : 1;
+    if (as > bs) return currentSortDir === "asc" ? 1 : -1;
+    return 0;
+  });
 }
 
-// Function to calculate average resolution time
-function calculateAvgResolutionTime(data) {
-  if (data.length === 0) return 0;
-  
-  const totalMinutes = data.reduce((sum, ticket) => {
-    return sum + parseDuration(ticket.Time_Open_Duration);
-  }, 0);
-  
-  return Math.round(totalMinutes / data.length);
-}
-
-// Function to count tickets exceeding SLA
-function countExceededSLA(data) {
-  return data.filter(ticket => parseDuration(ticket.Time_Open_Duration) > 45).length;
-}
-
-// Function to render table rows
-function renderTableRows(data) {
+function renderTable() {
   const tbody = document.getElementById("ticketRows");
   tbody.innerHTML = "";
-  
-  if (data.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" style="text-align: center; padding: 40px;">
-          No tickets match your current filters
-        </td>
-      </tr>
-    `;
-    return;
-  }
-  
-  data.forEach(row => {
-    const durationMinutes = parseDuration(row.Time_Open_Duration);
-    const exceededDuration = durationMinutes > 45;
-    
-    const priorityClass = row.Priority ? row.Priority.toLowerCase() : "medium";
-    
-    tbody.innerHTML += `
-      <tr class="${exceededDuration ? 'exceeded-duration' : ''}">
-        <td>${row.Agent_Name}</td>
-        <td>${row.Agent_Open_Ticket}</td>
-        <td><span class="priority ${priorityClass}">${row.Priority}</span></td>
-        <td><span class="status">${row.Ticket_Status}</span></td>
-        <td><span class="duration ${exceededDuration ? 'exceeded' : ''}">${row.Time_Open_Duration}</span></td>
-        <td>${row.User_Email}</td>
-        <td>${row.Plan_Type}</td>
-        <td class="tags">
-          ${row.Tags.split(',').map(tag => `<span class="tag">${tag.trim()}</span>`).join('')}
-        </td>
-      </tr>
-    `;
-  });
-}
 
-// Function to update plan breakdown
-function updatePlanBreakdown(data) {
-  const planCounts = {};
-  data.forEach(t => {
-    planCounts[t.Plan_Type] = (planCounts[t.Plan_Type] || 0) + 1;
-  });
+  tickets.forEach(t => {
+    const minutes = durationToMinutes(t.Time_Open_Duration);
+    const breached = isBreached(t);
 
-  const planDiv = document.getElementById("planBreakdown");
-  planDiv.innerHTML = "";
-  
-  Object.entries(planCounts).forEach(([plan, count]) => {
-    planDiv.innerHTML += `
-      <div class="plan-item">
-        <div class="plan-name">
-          <div class="plan-color" style="background-color: ${planColors[plan] || '#6c757d'}"></div>
-          <span>${plan}</span>
-        </div>
-        <div class="plan-count">${count}</div>
-      </div>
-    `;
-  });
-}
+    const tr = document.createElement("tr");
 
-// Function to update statistics
-function updateStatistics(data) {
-  document.getElementById("totalTickets").innerText = data.length;
-  document.getElementById("avgResolutionTime").innerText = `${calculateAvgResolutionTime(data)}m`;
-  document.getElementById("exceededSLA").innerText = countExceededSLA(data);
-}
-
-// Sorting functionality
-function setupSorting() {
-  const sortableHeaders = document.querySelectorAll('th.sortable');
-  
-  sortableHeaders.forEach(header => {
-    header.addEventListener('click', () => {
-      const column = header.getAttribute('data-sort');
-      
-      // Reset other headers
-      sortableHeaders.forEach(h => {
-        if (h !== header) {
-          h.classList.remove('asc', 'desc');
-        }
-      });
-      
-      // Toggle direction if same column
-      if (currentSort.column === column) {
-        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-      } else {
-        currentSort.column = column;
-        currentSort.direction = 'asc';
-      }
-      
-      // Update UI
-      header.classList.remove('asc', 'desc');
-      header.classList.add(currentSort.direction);
-      
-      // Sort data
-      sortData();
-    });
-  });
-}
-
-// Function to sort data based on current sort settings
-function sortData() {
-  const sortedData = [...currentData].sort((a, b) => {
-    let aValue, bValue;
-    
-    switch(currentSort.column) {
-      case 'agent':
-        aValue = a.Agent_Name;
-        bValue = b.Agent_Name;
-        break;
-      case 'open':
-        aValue = a.Agent_Open_Ticket;
-        bValue = b.Agent_Open_Ticket;
-        break;
-      case 'priority':
-        const priorityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
-        aValue = priorityOrder[a.Priority] || 0;
-        bValue = priorityOrder[b.Priority] || 0;
-        break;
-      case 'status':
-        aValue = a.Ticket_Status;
-        bValue = b.Ticket_Status;
-        break;
-      case 'duration':
-        aValue = parseDuration(a.Time_Open_Duration);
-        bValue = parseDuration(b.Time_Open_Duration);
-        break;
-      case 'email':
-        aValue = a.User_Email;
-        bValue = b.User_Email;
-        break;
-      case 'plan':
-        aValue = a.Plan_Type;
-        bValue = b.Plan_Type;
-        break;
-      default:
-        return 0;
+    if (minutes > 45) {
+      tr.classList.add("row-critical");
     }
-    
-    if (currentSort.direction === 'asc') {
-      return aValue > bValue ? 1 : -1;
+    if (breached) {
+      tr.classList.add("row-breached");
+    }
+
+    // Agent
+    const tdAgent = document.createElement("td");
+    tdAgent.textContent = t.Agent_Name || "UNASSIGNED";
+    tr.appendChild(tdAgent);
+
+    // Open tickets (right aligned)
+    const tdOpen = document.createElement("td");
+    tdOpen.className = "text-right";
+    tdOpen.textContent = t.Agent_Open_Ticket;
+    tr.appendChild(tdOpen);
+
+    // Priority badge
+    const tdPriority = document.createElement("td");
+    const priority = (t.Priority || "").toUpperCase();
+    const priSpan = document.createElement("span");
+    priSpan.classList.add("badge");
+
+    if (priority === "HIGH") {
+      priSpan.classList.add("badge-priority-high");
+    } else if (priority === "MEDIUM") {
+      priSpan.classList.add("badge-priority-medium");
+    } else if (priority === "LOW") {
+      priSpan.classList.add("badge-priority-low");
     } else {
-      return aValue < bValue ? 1 : -1;
+      priSpan.classList.add("badge-priority-medium");
     }
+
+    priSpan.textContent = priority || "NA";
+    tdPriority.appendChild(priSpan);
+    tr.appendChild(tdPriority);
+
+    // Status
+    const tdStatus = document.createElement("td");
+    const status = (t.Ticket_Status || "").toUpperCase();
+    const statusSpan = document.createElement("span");
+    statusSpan.classList.add("badge");
+    if (status === "OPEN") {
+      statusSpan.classList.add("badge-status-open");
+    } else {
+      statusSpan.classList.add("badge-status-other");
+    }
+    statusSpan.textContent = status || "NA";
+    tdStatus.appendChild(statusSpan);
+    tr.appendChild(tdStatus);
+
+    // Age
+    const tdAge = document.createElement("td");
+    tdAge.textContent = t.Time_Open_Duration || "";
+    tr.appendChild(tdAge);
+
+    // User email
+    const tdEmail = document.createElement("td");
+    tdEmail.textContent = t.User_Email || "";
+    tr.appendChild(tdEmail);
+
+    // Plan
+    const tdPlan = document.createElement("td");
+    tdPlan.textContent = t.Plan_Type || "";
+    tr.appendChild(tdPlan);
+
+    // Tags
+    const tdTags = document.createElement("td");
+    tdTags.textContent = t.Tags || "";
+    tr.appendChild(tdTags);
+
+    tbody.appendChild(tr);
   });
-  
-  renderTableRows(sortedData);
 }
 
-// Filter functionality
-function setupFiltering() {
-  const filterButtons = document.querySelectorAll('.filter-btn');
-  
-  filterButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      // Remove active class from all buttons
-      filterButtons.forEach(btn => btn.classList.remove('active'));
-      
-      // Add active class to clicked button
-      button.classList.add('active');
-      
-      // Set current filter
-      currentFilter = button.getAttribute('data-filter');
-      
-      // Apply filter
-      applyFilter();
+// Sorting handlers
+
+function attachSortHandlers() {
+  const headers = document.querySelectorAll("#ticketTable thead th[data-sort]");
+  headers.forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort");
+      if (!key) return;
+
+      if (currentSortKey === key) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+      } else {
+        currentSortKey = key;
+        currentSortDir = key === "Agent_Open_Ticket" ? "desc" : "asc";
+      }
+
+      clearSortIndicators();
+      sortTickets();
+      renderTable();
+      applySortIndicator();
     });
   });
 }
 
-// Function to apply current filter
-function applyFilter() {
-  let filteredData = [...mockData];
-  
-  switch(currentFilter) {
-    case 'high':
-      filteredData = filteredData.filter(ticket => ticket.Priority === 'High');
-      break;
-    case 'exceeded':
-      filteredData = filteredData.filter(ticket => parseDuration(ticket.Time_Open_Duration) > 45);
-      break;
-    case 'enterprise':
-      filteredData = filteredData.filter(ticket => ticket.Plan_Type === 'Enterprise');
-      break;
-    default:
-      // 'all' filter - no additional filtering needed
-      break;
-  }
-  
-  currentData = filteredData;
-  updateStatistics(currentData);
-  updatePlanBreakdown(currentData);
-  
-  // Re-apply current sort if exists
-  if (currentSort.column) {
-    sortData();
-  } else {
-    renderTableRows(currentData);
+// Main load
+
+async function load() {
+  try {
+    const res = await fetch(API_URL);
+    const raw = await res.json();
+
+    // Normalize and pre sort by open tickets desc
+    tickets = raw.map(normalizeRow);
+    currentSortKey = "Agent_Open_Ticket";
+    currentSortDir = "desc";
+
+    sortTickets();
+    renderStats();
+    renderPlans();
+    renderTable();
+    clearSortIndicators();
+    applySortIndicator();
+    attachSortHandlers();
+  } catch (err) {
+    console.error("Failed to load dashboard data:", err);
+    const tbody = document.getElementById("ticketRows");
+    tbody.innerHTML =
+      '<tr><td colspan="8" class="text-muted">Error loading data</td></tr>';
   }
 }
 
-// Search functionality
-function setupSearch() {
-  const searchInput = document.getElementById('searchInput');
-  
-  searchInput.addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    
-    if (searchTerm.length === 0) {
-      // If search is empty, revert to current filter
-      applyFilter();
-      return;
-    }
-    
-    const filteredData = currentData.filter(ticket => {
-      return (
-        ticket.Agent_Name.toLowerCase().includes(searchTerm) ||
-        ticket.User_Email.toLowerCase().includes(searchTerm) ||
-        ticket.Tags.toLowerCase().includes(searchTerm) ||
-        ticket.Plan_Type.toLowerCase().includes(searchTerm)
-      );
-    });
-    
-    renderTableRows(filteredData);
-  });
-}
-
-// Initialize dashboard
-function initDashboard() {
-  updateStatistics(mockData);
-  updatePlanBreakdown(mockData);
-  renderTableRows(mockData);
-  setupSorting();
-  setupFiltering();
-  setupSearch();
-}
-
-// Load dashboard when page is ready
-document.addEventListener('DOMContentLoaded', initDashboard);
+load();

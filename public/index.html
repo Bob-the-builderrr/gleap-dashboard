@@ -1,89 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gleap Dashboard - Ticket Management</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Gleap Live Ticket Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div>
+  <div class="app">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="header-left">
         <h1>Gleap Live Ticket Dashboard</h1>
-        <div class="subtitle">Real-time monitoring of customer support tickets</div>
+        <p class="subtitle">Live open tickets by agent from Turso Cloud</p>
       </div>
-      <div class="logo">
-        <div class="logo-icon">G</div>
-        <div>Turso Cloud</div>
+      <div class="header-right">
+        <span class="pill pill-soft" id="lastRefreshed">Last refreshed: --</span>
       </div>
     </header>
 
-    <div class="dashboard-stats">
-      <div class="stat-card">
-        <h3>Total Tickets</h3>
+    <!-- TOP STATS -->
+    <section class="stats-grid">
+      <div class="stat-card stat-primary">
+        <div class="stat-label">Total open tickets</div>
         <div class="stat-value" id="totalTickets">0</div>
-        <div class="subtitle">Currently open tickets across all agents</div>
+        <div class="stat-footnote" id="totalTicketsNote">Across all plans</div>
       </div>
 
       <div class="stat-card">
-        <h3>Plan Breakdown</h3>
-        <div id="planBreakdown" class="plan-breakdown">
-          <!-- Plan breakdown will be populated here -->
+        <div class="stat-label">Agents with open tickets</div>
+        <div class="stat-value" id="agentsWithTickets">0</div>
+        <div class="stat-footnote">Unique agents currently handling tickets</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">SLA breached</div>
+        <div class="stat-value" id="slaBreachedCount">0</div>
+        <div class="stat-footnote">Where SLA_Breached is true</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Average ticket age</div>
+        <div class="stat-value" id="avgAge">0 m</div>
+        <div class="stat-footnote">Based on Time_Open_Duration</div>
+      </div>
+    </section>
+
+    <!-- PLAN BREAKDOWN -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Plan breakdown</h2>
+      </div>
+      <div class="plan-chips" id="planBreakdown">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- TABLE SECTION -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h2>Live tickets by agent</h2>
+          <p class="panel-subtitle">
+            Sorted by open tickets. Click a column header to sort.
+          </p>
+        </div>
+        <div class="legend">
+          <span class="legend-item">
+            <span class="legend-dot legend-critical"></span>
+            Age more than 45 minutes
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-breached"></span>
+            SLA breached
+          </span>
         </div>
       </div>
 
-      <div class="stat-card">
-        <h3>Avg Resolution Time</h3>
-        <div class="stat-value" id="avgResolutionTime">0m</div>
-        <div class="subtitle">Across all ticket priorities</div>
+      <div class="table-wrapper">
+        <table id="ticketTable">
+          <thead>
+            <tr>
+              <!-- Sorting is handled by data-sort attributes -->
+              <th data-sort="Agent_Name">Agent</th>
+              <th data-sort="Agent_Open_Ticket" class="is-numeric">Open</th>
+              <th data-sort="Priority">Priority</th>
+              <th data-sort="Ticket_Status">Status</th>
+              <th data-sort="Time_Open_Duration">Age</th>
+              <th data-sort="User_Email">User email</th>
+              <th data-sort="Plan_Type">Plan</th>
+              <th data-sort="Tags">Tags</th>
+            </tr>
+          </thead>
+          <tbody id="ticketRows">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
       </div>
-
-      <div class="stat-card">
-        <h3>Exceeded SLA</h3>
-        <div class="stat-value" id="exceededSLA">0</div>
-        <div class="subtitle">Tickets open > 45 minutes</div>
-      </div>
-    </div>
-
-    <div class="dashboard-controls">
-      <div class="search-box">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <input type="text" id="searchInput" placeholder="Search tickets, agents, or users...">
-      </div>
-      <div class="filter-controls">
-        <button class="filter-btn active" data-filter="all">All Tickets</button>
-        <button class="filter-btn" data-filter="high">High Priority</button>
-        <button class="filter-btn" data-filter="exceeded">Exceeded SLA</button>
-        <button class="filter-btn" data-filter="enterprise">Enterprise</button>
-      </div>
-    </div>
-
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th class="sortable" data-sort="agent">Agent</th>
-            <th class="sortable" data-sort="open">Open Tickets</th>
-            <th class="sortable" data-sort="priority">Priority</th>
-            <th class="sortable" data-sort="status">Status</th>
-            <th class="sortable" data-sort="duration">Duration</th>
-            <th class="sortable" data-sort="email">User Email</th>
-            <th class="sortable" data-sort="plan">Plan</th>
-            <th>Tags</th>
-          </tr>
-        </thead>
-        <tbody id="ticketRows">
-          <!-- Table rows will be populated here -->
-        </tbody>
-      </table>
-    </div>
-
-    <footer>
-      Gleap Dashboard • Updated just now • Powered by Turso Cloud
-    </footer>
+    </section>
   </div>
 
   <script src="dashboard.js"></script>
