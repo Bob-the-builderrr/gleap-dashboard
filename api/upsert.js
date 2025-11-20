@@ -6,7 +6,7 @@ export const config = {
 
 const turso = createClient({
   url: "https://gleaplive-bob-the-builderrr.aws-us-east-1.turso.io",
- authToken: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjM2MTE3MDEsImlkIjoiY2Y3ZDVlZTEtZDg4ZC00OWFmLWFiZWItNDEwNmI1Zjk4NWE4IiwicmlkIjoiMGVjMzNmNGYtMTU5ZC00NWQ5LWFmNzctNTgzODlkNmUwMjg1In0.3Gi7P4w6J1_Us0Q-vLMmcYeawbEsB_DfBxOsINX5DExQJa7Cc4cJFNhwz-ftf0hiRaxJUy_Jdsm9wy9qXNEMDQ"
+  authToken: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjM2MTE3MDEsImlkIjoiY2Y3ZDVlZTEtZDg4ZC00OWFmLWFiZWItNDEwNmI1Zjk4NWE4IiwicmlkIjoiMGVjMzNmNGYtMTU5ZC00NWQ5LWFmNzctNTgzODlkNmUwMjg1In0.3Gi7P4w6J1_Us0Q-vLMmcYeawbEsB_DfBxOsINX5DExQJa7Cc4cJFNhwz-ftf0hiRaxJUy_Jdsm9wy9qXNEMDQ"
 });
 
 export default async function handler(req, res) {
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const rows = req.body?.rows;
 
     if (!rows || !Array.isArray(rows)) {
-      return res.status(400).json({ error: "Invalid rows array" });
+      return res.status(400).json({ error: "Rows missing or invalid" });
     }
 
     for (const r of rows) {
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
             Time_Open_Duration, Agent_Open_Ticket, refreshed_at
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-          ON CONFLICT(Ticket_ID) DO UPDATE SET
+          ON CONFLICT (Ticket_ID) DO UPDATE SET
             Agent_Name = excluded.Agent_Name,
             Ticket_Status = excluded.Ticket_Status,
             Ticket_Type = excluded.Ticket_Type,
