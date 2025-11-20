@@ -1,27 +1,25 @@
-async function loadDashboard() {
-  const res = await fetch("/api/agents");
+async function load() {
+  const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
   const data = await res.json();
 
-  // Count valid tickets (exclude placeholder "-")
   const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
 
-  // Total Tickets
+  // Total Open Tickets
   document.getElementById("totalTickets").innerText = valid.length;
 
-  // Plan type counts
-  const planCounts = {};
+  // Tickets by Plan
+  const plan = {};
   valid.forEach(r => {
-    planCounts[r.plan_type] = (planCounts[r.plan_type] || 0) + 1;
+    plan[r.plan_type] = (plan[r.plan_type] || 0) + 1;
   });
 
-  // Render plan counts
   const planDiv = document.getElementById("planBreakdown");
   planDiv.innerHTML = "";
-  Object.entries(planCounts).forEach(([k, v]) => {
+  Object.entries(plan).forEach(([k, v]) => {
     planDiv.innerHTML += `<p>${k}: ${v}</p>`;
   });
 
-  // Render table
+  // Table rows
   const tbody = document.getElementById("ticketRows");
   tbody.innerHTML = "";
 
@@ -35,10 +33,10 @@ async function loadDashboard() {
         <td>${r.time_open_duration}</td>
         <td>${r.user_email}</td>
         <td>${r.plan_type}</td>
-        <td>${r.tags}</td>
+        <td>${r.tags || ""}</td>
       </tr>
     `;
   });
 }
 
-loadDashboard();
+load();
