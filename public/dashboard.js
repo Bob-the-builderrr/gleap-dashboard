@@ -1,44 +1,44 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Gleap Ticket Dashboard</title>
-  <link rel="stylesheet" href="style.css">
-</head>
+async function loadDashboard() {
+  const res = await fetch("/api/agents");
+  const data = await res.json();
 
-<body>
+  // Count valid tickets (exclude placeholder "-")
+  const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
 
-<h1>Gleap Live Ticket Dashboard</h1>
+  // Total Tickets
+  document.getElementById("totalTickets").innerText = valid.length;
 
-<div class="summary">
-  <div class="box">
-    <h2>Total Open Tickets</h2>
-    <p id="totalTickets">0</p>
-  </div>
+  // Plan type counts
+  const planCounts = {};
+  valid.forEach(r => {
+    planCounts[r.plan_type] = (planCounts[r.plan_type] || 0) + 1;
+  });
 
-  <div class="box">
-    <h2>Tickets by Plan</h2>
-    <div id="planBreakdown"></div>
-  </div>
-</div>
+  // Render plan counts
+  const planDiv = document.getElementById("planBreakdown");
+  planDiv.innerHTML = "";
+  Object.entries(planCounts).forEach(([k, v]) => {
+    planDiv.innerHTML += `<p>${k}: ${v}</p>`;
+  });
 
-<div class="tableBox">
-  <table>
-    <thead>
+  // Render table
+  const tbody = document.getElementById("ticketRows");
+  tbody.innerHTML = "";
+
+  valid.forEach(r => {
+    tbody.innerHTML += `
       <tr>
-        <th>Agent</th>
-        <th>Open Tickets</th>
-        <th>Priority</th>
-        <th>Status</th>
-        <th>Duration</th>
-        <th>Email</th>
-        <th>Plan</th>
-        <th>Tags</th>
+        <td>${r.agent_name}</td>
+        <td>${r.agent_open_ticket}</td>
+        <td>${r.priority}</td>
+        <td>${r.ticket_status}</td>
+        <td>${r.time_open_duration}</td>
+        <td>${r.user_email}</td>
+        <td>${r.plan_type}</td>
+        <td>${r.tags}</td>
       </tr>
-    </thead>
-    <tbody id="ticketRows"></tbody>
-  </table>
-</div>
+    `;
+  });
+}
 
-<script src="dashboard.js"></script>
-</body>
-</html>
+loadDashboard();
