@@ -1,41 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Gleap Dashboard (Turso Cloud)</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Gleap Live Ticket Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="app">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="header-left">
+        <h1>Gleap Live Ticket Dashboard</h1>
+        <p class="subtitle">Live open tickets by agent from Turso Cloud</p>
+      </div>
+      <div class="header-right">
+        <span class="pill pill-soft" id="lastRefreshed">Last refreshed: --</span>
+      </div>
+    </header>
 
-<h1>Gleap Live Ticket Dashboard</h1>
+    <!-- TOP STATS -->
+    <section class="stats-grid">
+      <div class="stat-card stat-primary">
+        <div class="stat-label">Total open tickets</div>
+        <div class="stat-value" id="totalTickets">0</div>
+        <div class="stat-footnote" id="totalTicketsNote">Across all plans</div>
+      </div>
 
-<div class="top">
-  <div class="box">
-    <h3>Total Tickets</h3>
-    <p id="totalTickets">0</p>
+      <div class="stat-card">
+        <div class="stat-label">Agents with open tickets</div>
+        <div class="stat-value" id="agentsWithTickets">0</div>
+        <div class="stat-footnote">Unique agents currently handling tickets</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">SLA breached</div>
+        <div class="stat-value" id="slaBreachedCount">0</div>
+        <div class="stat-footnote">Where SLA_Breached is true</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Average ticket age</div>
+        <div class="stat-value" id="avgAge">0 m</div>
+        <div class="stat-footnote">Based on Time_Open_Duration</div>
+      </div>
+    </section>
+
+    <!-- PLAN BREAKDOWN -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Plan breakdown</h2>
+      </div>
+      <div class="plan-chips" id="planBreakdown">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- TABLE SECTION -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h2>Live tickets by agent</h2>
+          <p class="panel-subtitle">
+            Sorted by open tickets. Click a column header to sort.
+          </p>
+        </div>
+        <div class="legend">
+          <span class="legend-item">
+            <span class="legend-dot legend-critical"></span>
+            Age more than 45 minutes
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-breached"></span>
+            SLA breached
+          </span>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="ticketTable">
+          <thead>
+            <tr>
+              <!-- Sorting is handled by data-sort attributes -->
+              <th data-sort="Agent_Name">Agent</th>
+              <th data-sort="Agent_Open_Ticket" class="is-numeric">Open</th>
+              <th data-sort="Priority">Priority</th>
+              <th data-sort="Ticket_Status">Status</th>
+              <th data-sort="Time_Open_Duration">Age</th>
+              <th data-sort="User_Email">User email</th>
+              <th data-sort="Plan_Type">Plan</th>
+              <th data-sort="Tags">Tags</th>
+            </tr>
+          </thead>
+          <tbody id="ticketRows">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
-  <div class="box">
-    <h3>Plan Breakdown</h3>
-    <div id="planBreakdown"></div>
-  </div>
-</div>
-
-<table>
-  <thead>
-    <tr>
-      <th>Agent</th>
-      <th>Open Tickets</th>
-      <th>Priority</th>
-      <th>Status</th>
-      <th>Duration</th>
-      <th>User Email</th>
-      <th>Plan</th>
-      <th>Tags</th>
-    </tr>
-  </thead>
-  <tbody id="ticketRows"></tbody>
-</table>
-
-<script src="dashboard.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>
