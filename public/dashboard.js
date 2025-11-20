@@ -1,53 +1,192 @@
+// Enhanced dashboard.js with additional features
+let allTickets = [];
+let currentSort = { field: 'agent_open_ticket', direction: 'desc' };
+
 async function load() {
-  // Fetch from Vercel API
-  const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
-  const data = await res.json();
+    showLoading(true);
+    
+    try {
+        const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
+        const data = await res.json();
 
-  // Rows that actually have a ticket
-  const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
-
-  // ---------- TOTAL TICKETS (sum of open tickets) ----------
-  const totalTickets = valid.reduce(
-    (sum, r) => sum + Number(r.agent_open_ticket || 0),
-    0
-  );
-  document.getElementById("totalTickets").innerText = totalTickets;
-
-  // ---------- PLAN BREAKDOWN (weighted by open tickets) ----------
-  const plan = {};
-  valid.forEach(r => {
-    const key = r.plan_type || "UNKNOWN_PLAN";
-    const count = Number(r.agent_open_ticket || 0);
-    plan[key] = (plan[key] || 0) + count;
-  });
-
-  const planDiv = document.getElementById("planBreakdown");
-  planDiv.innerHTML = "";
-  Object.entries(plan).forEach(([k, v]) => {
-    planDiv.innerHTML += `<p>${k}: ${v}</p>`;
-  });
-
-  // ---------- TABLE (valid rows first, then empty ones) ----------
-  const empty = data.filter(r => !r.ticket_id || r.ticket_id === "-");
-  const ordered = [...valid, ...empty];
-
-  const tbody = document.getElementById("ticketRows");
-  tbody.innerHTML = "";
-
-  ordered.forEach(r => {
-    tbody.innerHTML += `
-      <tr>
-        <td>${r.agent_name}</td>
-        <td>${r.agent_open_ticket}</td>
-        <td>${r.priority}</td>
-        <td>${r.ticket_status}</td>
-        <td>${r.time_open_duration}</td>
-        <td>${r.user_email}</td>
-        <td>${r.plan_type}</td>
-        <td>${r.tags}</td>
-      </tr>
-    `;
-  });
+        allTickets = data;
+        
+        // Update last updated time
+        document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+        
+        updateDashboard(data);
+        setupEventListeners();
+        
+    } catch (error) {
+        console.error('Error loading data:', error);
+        alert('Error loading dashboard data. Please try again.');
+    } finally {
+        showLoading(false);
+    }
 }
 
-load();
+function updateDashboard(data) {
+    // Filter valid tickets (with actual ticket IDs)
+    const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
+
+    // Update total tickets
+    const totalTickets = valid.reduce((sum, r) => sum + Number(r.agent_open_ticket || 0), 0);
+    document.getElementById("totalTickets").innerText = totalTickets.toLocaleString();
+
+    // Update active agents
+    const activeAgents = valid.filter(r => r.agent_name && r.agent_name !== "-").length;
+    document.getElementById("activeAgents").innerText = activeAgents.toLocaleString();
+
+    // Update high priority tickets
+    const highPriorityTickets = valid.filter(r => 
+        r.priority && r.priority.toLowerCase().includes('high')
+    ).length;
+    document.getElementById("highPriorityTickets").innerText = highPriorityTickets.toLocaleString();
+
+    // Update plan breakdown
+    updatePlanBreakdown(valid);
+
+    // Update table
+    updateTable(data);
+
+    // Update counts
+    document.getElementById("showingCount").innerText = valid.length.toLocaleString();
+    document.getElementById("totalCount").innerText = data.length.toLocaleString();
+}
+
+function updatePlanBreakdown(validTickets) {
+    const plan = {};
+    validTickets.forEach(r => {
+        const key = r.plan_type || "UNKNOWN_PLAN";
+        const count = Number(r.agent_open_ticket || 0);
+        plan[key] = (plan[key] || 0) + count;
+    });
+
+    const planDiv = document.getElementById("planBreakdown");
+    planDiv.innerHTML = "";
+    
+    Object.entries(plan)
+        .sort(([,a], [,b]) => b - a)
+        .forEach(([planName, count]) => {
+            const planItem = document.createElement("div");
+            planItem.className = "plan-item";
+            planItem.innerHTML = `
+                <span class="plan-name">${planName}</span>
+                <span class="plan-count">${count}</span>
+            `;
+            planDiv.appendChild(planItem);
+        });
+}
+
+function updateTable(data) {
+    const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
+    const empty = data.filter(r => !r.ticket_id || r.ticket_id === "-");
+    const ordered = [...valid, ...empty];
+
+    const tbody = document.getElementById("ticketRows");
+    tbody.innerHTML = "";
+
+    ordered.forEach(r => {
+        const row = document.createElement("tr");
+        
+        // Determine priority class
+        let priorityClass = 'priority-medium';
+        if (r.priority) {
+            if (r.priority.toLowerCase().includes('high')) priorityClass = 'priority-high';
+            else if (r.priority.toLowerCase().includes('low')) priorityClass = 'priority-low';
+        }
+
+        // Determine status class
+        let statusClass = 'status-open';
+        if (r.ticket_status) {
+            if (r.ticket_status.toLowerCase().includes('pending')) statusClass = 'status-pending';
+            else if (r.ticket_status.toLowerCase().includes('closed')) statusClass = 'status-closed';
+        }
+
+        row.innerHTML = `
+            <td>${r.agent_name || '-'}</td>
+            <td><strong>${r.agent_open_ticket || '0'}</strong></td>
+            <td><span class="${priorityClass}">${r.priority || 'Medium'}</span></td>
+            <td><span class="${statusClass}">${r.ticket_status || 'Open'}</span></td>
+            <td>${formatDuration(r.time_open_duration)}</td>
+            <td>${r.user_email || '-'}</td>
+            <td>${r.plan_type || '-'}</td>
+            <td>${formatTags(r.tags)}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function formatDuration(duration) {
+    if (!duration) return '-';
+    // Add duration formatting logic here if needed
+    return duration;
+}
+
+function formatTags(tags) {
+    if (!tags) return '-';
+    // Format tags as badges if needed
+    return tags;
+}
+
+function setupEventListeners() {
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredTickets = allTickets.filter(ticket => 
+                Object.values(ticket).some(value => 
+                    value && value.toString().toLowerCase().includes(searchTerm)
+                )
+            );
+            updateTable(filteredTickets);
+        });
+    }
+
+    // Sort functionality
+    const sortableHeaders = document.querySelectorAll('th[data-sort]');
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', () => {
+            const field = header.getAttribute('data-sort');
+            sortTable(field);
+        });
+    });
+}
+
+function sortTable(field) {
+    const direction = currentSort.field === field && currentSort.direction === 'asc' ? 'desc' : 'asc';
+    currentSort = { field, direction };
+
+    const sortedTickets = [...allTickets].sort((a, b) => {
+        let aValue = a[field] || '';
+        let bValue = b[field] || '';
+
+        // Handle numeric sorting for open tickets
+        if (field === 'open') {
+            aValue = Number(a.agent_open_ticket || 0);
+            bValue = Number(b.agent_open_ticket || 0);
+        }
+
+        if (direction === 'asc') {
+            return aValue > bValue ? 1 : -1;
+        } else {
+            return aValue < bValue ? 1 : -1;
+        }
+    });
+
+    updateTable(sortedTickets);
+}
+
+function showLoading(show) {
+    const spinner = document.getElementById('loadingSpinner');
+    if (spinner) {
+        spinner.style.display = show ? 'flex' : 'none';
+    }
+}
+
+// Auto-refresh every 30 seconds
+setInterval(load, 30000);
+
+// Initial load
+document.addEventListener('DOMContentLoaded', load);
