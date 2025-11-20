@@ -1,5 +1,5 @@
 async function load() {
-  const res = await fetch("/api/agents");
+ const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
   const data = await res.json();
 
   const valid = data.filter(r => r.ticket_id !== "-");
