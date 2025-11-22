@@ -1,12 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gleap Dashboard (Turso Cloud)</title>
+  <title>Gleap Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <h1>Gleap Live Ticket Dashboard</h1>
+
+<!-- TIME FILTER FOR ARCHIVED TICKETS -->
+<div class="time-filter">
+  <label>Archived Tickets Time Window: </label>
+  <select id="timeWindow" onchange="loadArchived()">
+    <option value="30m">Last 30 minutes</option>
+    <option value="1h">Last 1 hour</option>
+    <option value="2h">Last 2 hours</option>
+  </select>
+</div>
 
 <!-- TAB BUTTONS -->
 <div class="tabs">
@@ -14,7 +24,7 @@
   <button class="tab" onclick="showTab('archived')">Archived Tickets</button>
 </div>
 
-<!-- DASHBOARD SUMMARY (VISIBLE ON BOTH TABS) -->
+<!-- DASHBOARD SUMMARY -->
 <div class="summary-section">
   <div class="summary-box">
     <h3>Total Tickets</h3>
@@ -56,11 +66,12 @@
     <table>
       <thead>
         <tr>
-          <th>Agent</th>
+          <th>Agent Name</th>
+          <th>Agent Email</th>
           <th>Ticket ID</th>
           <th>Total Count</th>
-          <th>Date (IST)</th>
-          <th>Time (IST)</th>
+          <th>Archived Date (IST)</th>
+          <th>Archived Time (IST)</th>
         </tr>
       </thead>
       <tbody id="archivedRows"></tbody>

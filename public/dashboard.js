@@ -20,92 +20,88 @@ function showTab(name) {
    LOAD ALL LIVE TICKETS
 ============================ */
 async function loadAllTickets() {
-  const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
-  const data = await res.json();
+  try {
+    const res = await fetch("/api/open-tickets");
+    const data = await res.json();
 
-  const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
+    const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
 
-  /* ---- Update TOTAL tickets ---- */
-  let total = valid.length;
-  document.getElementById("totalTickets").innerText = total;
+    /* ---- Update TOTAL tickets ---- */
+    let total = valid.length;
+    document.getElementById("totalTickets").innerText = total;
 
-  /* ---- Plan breakdown ---- */
-  const plan = {};
-  valid.forEach(r => {
-    const key = r.plan_type || "UNKNOWN_PLAN";
-    plan[key] = (plan[key] || 0) + 1;
-  });
+    /* ---- Plan breakdown ---- */
+    const plan = {};
+    valid.forEach(r => {
+      const key = r.plan_type || "UNKNOWN_PLAN";
+      plan[key] = (plan[key] || 0) + 1;
+    });
 
-  const planDiv = document.getElementById("planBreakdown");
-  planDiv.innerHTML = "";
-  Object.entries(plan).forEach(([k, v]) => {
-    planDiv.innerHTML += `<p>${k}: ${v}</p>`;
-  });
+    const planDiv = document.getElementById("planBreakdown");
+    planDiv.innerHTML = "";
+    Object.entries(plan).forEach(([k, v]) => {
+      planDiv.innerHTML += `<p><strong>${k}:</strong> ${v}</p>`;
+    });
 
-  /* ---- Fill Table ---- */
-  const tbody = document.getElementById("ticketRows");
-  tbody.innerHTML = "";
+    /* ---- Fill Table ---- */
+    const tbody = document.getElementById("ticketRows");
+    tbody.innerHTML = "";
 
-  valid.forEach(r => {
-    tbody.innerHTML += `
-      <tr>
-        <td>${r.agent_name}</td>
-        <td>${r.agent_open_ticket}</td>
-        <td>${r.priority}</td>
-        <td>${r.ticket_status}</td>
-        <td>${r.time_open_duration}</td>
-        <td>${r.user_email}</td>
-        <td>${r.plan_type}</td>
-        <td>${r.tags}</td>
-      </tr>
-    `;
-  });
+    valid.forEach(r => {
+      tbody.innerHTML += `
+        <tr>
+          <td>${r.agent_name || "UNASSIGNED"}</td>
+          <td>${r.agent_open_ticket || "0"}</td>
+          <td>${r.priority || "-"}</td>
+          <td>${r.ticket_status || "-"}</td>
+          <td>${r.time_open_duration || "-"}</td>
+          <td>${r.user_email || "-"}</td>
+          <td>${r.plan_type || "-"}</td>
+          <td>${r.tags || "-"}</td>
+        </tr>
+      `;
+    });
+  } catch (err) {
+    console.error("Error loading tickets:", err);
+    document.getElementById("ticketRows").innerHTML = 
+      `<tr><td colspan="8" style="text-align: center; color: red;">Error loading tickets</td></tr>`;
+  }
 }
 
 /* ============================
    LOAD ARCHIVED TICKETS
 ============================ */
 async function loadArchived() {
-  const res = await fetch(
-    "https://dashapi.gleap.io/v3/tickets?skip=0&limit=200&archived=true&type[]=INQUIRY&ignoreArchived=true&isSpam=false&sort=-lastNotification",
-    {
-      headers: {
-        "Authorization": "Bearer YOUR_TOKEN_HERE",
-        "Accept": "application/json",
-        "project": "64d9fa1b014ae7130f2e58d1"
-      }
+  try {
+    const timeWindow = document.getElementById("timeWindow").value;
+    const res = await fetch(`/api/archived-tickets?window=${timeWindow}`);
+    const data = await res.json();
+
+    const tbody = document.getElementById("archivedRows");
+    tbody.innerHTML = "";
+
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No archived tickets found for selected time window</td></tr>`;
+      return;
     }
-  );
 
-  const data = await res.json();
-  const tickets = data.tickets || [];
-
-  const tbody = document.getElementById("archivedRows");
-  tbody.innerHTML = "";
-
-  tickets.forEach(t => {
-    const agent = t.processingUser || {};
-    const fullName =
-      `${agent.firstName || ""} ${agent.lastName || ""}`.trim() ||
-      agent.email;
-
-    const d = new Date(t.archivedAt);
-    const dateIST = d.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" });
-    const timeIST = d.toLocaleTimeString("en-US", {
-      timeZone: "Asia/Kolkata",
-      hour12: false
+    data.forEach(t => {
+      tbody.innerHTML += `
+        <tr>
+          <td>${t.agent_name}</td>
+          <td>${t.agent_email}</td>
+          <td>${t.ticket_id}</td>
+          <td>${t.total_count}</td>
+          <td>${t.archived_date_ist}</td>
+          <td>${t.archived_time_ist}</td>
+        </tr>
+      `;
     });
-
-    tbody.innerHTML += `
-      <tr>
-        <td>${fullName}</td>
-        <td>${t.id}</td>
-        <td>${t.totalCount || "-"}</td>
-        <td>${dateIST}</td>
-        <td>${timeIST}</td>
-      </tr>
-    `;
-  });
+  } catch (err) {
+    console.error("Error loading archived tickets:", err);
+    document.getElementById("archivedRows").innerHTML = 
+      `<tr><td colspan="6" style="text-align: center; color: red;">Error loading archived tickets</td></tr>`;
+  }
 }
 
 /* ============================
@@ -113,3 +109,10 @@ async function loadArchived() {
 ============================ */
 loadAllTickets();
 loadArchived();
+
+// Auto-refresh every 30 seconds
+setInterval(() => {
+  if (document.getElementById("allTab").style.display !== "none") {
+    loadAllTickets();
+  }
+}, 30000);
