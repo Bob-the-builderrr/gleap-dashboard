@@ -25,12 +25,7 @@ const dom = {
   autoRefresh: document.getElementById("autoRefresh"),
 };
 
-/**
- * Format a Date object into the yyyy-mm-ddThh:mm string
- * that <input type="datetime-local"> expects, using LOCAL time.
- */
-function toIstInputValue(date) {
-  // Note: despite the name, this now uses the browser's local timezone.
+function toInputValue(date) {
   const local = new Date(date);
   const y = local.getFullYear();
   const m = String(local.getMonth() + 1).padStart(2, "0");
@@ -40,22 +35,12 @@ function toIstInputValue(date) {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-/**
- * Parse a user input date/time and convert it to a UTC ISO string.
- * Accepts:
- *  - "yyyy-mm-ddThh:mm" (from datetime-local)
- *  - "yyyy-mm-dd hh:mm"
- *  - "dd-mm-yyyy hh:mm"
- * If time is missing, uses 00:00 for start, 23:59 for end.
- * Uses LOCAL timezone automatically, then converts to UTC.
- */
-function parseIstInput(value, isEndOfDay) {
+function parseInputToUtcIso(value, isEndOfDay) {
   const trimmed = (value || "").trim();
   if (!trimmed) throw new Error("Please select both start and end dates.");
 
   let datePart = "";
   let timePart = "";
-
   if (trimmed.includes("T")) {
     [datePart, timePart] = trimmed.split("T");
   } else {
@@ -63,58 +48,42 @@ function parseIstInput(value, isEndOfDay) {
   }
 
   datePart = (datePart || "").replace(/\//g, "-");
-
-  if (!timePart || timePart === "") {
-    timePart = isEndOfDay ? "23:59" : "00:00";
-  }
+  if (!timePart) timePart = isEndOfDay ? "23:59" : "00:00";
 
   let normalized;
-
   if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-    // yyyy-mm-dd
     normalized = `${datePart}T${timePart}`;
   } else if (/^\d{2}-\d{2}-\d{4}$/.test(datePart)) {
-    // dd-mm-yyyy
     const [day, month, year] = datePart.split("-").map(Number);
-    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
+    if ([day, month, year].some(Number.isNaN)) {
       throw new Error("Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd.");
     }
-    const y = String(year).padStart(4, "0");
-    const m = String(month).padStart(2, "0");
-    const d = String(day).padStart(2, "0");
-    normalized = `${y}-${m}-${d}T${timePart}`;
+    normalized = `${String(year).padStart(4, "0")}-${String(month).padStart(
+      2,
+      "0"
+    )}-${String(day).padStart(2, "0")}T${timePart}`;
   } else {
     throw new Error("Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd.");
   }
 
-  const date = new Date(normalized); // interpreted as LOCAL time
-  if (Number.isNaN(date.getTime())) {
-    throw new Error("Invalid time format.");
-  }
-
-  if (isEndOfDay) {
-    // Push to the end of the selected minute
-    date.setSeconds(59, 999);
-  }
-
-  // Convert local time to UTC ISO string
+  const date = new Date(normalized); // local time
+  if (Number.isNaN(date.getTime())) throw new Error("Invalid time format.");
+  if (isEndOfDay) date.setSeconds(59, 999);
   return date.toISOString();
 }
 
 function setInputsForRange(startUtc, endUtc) {
-  dom.startInput.value = toIstInputValue(startUtc);
-  dom.endInput.value = toIstInputValue(endUtc);
+  dom.startInput.value = toInputValue(startUtc);
+  dom.endInput.value = toInputValue(endUtc);
 }
 
 function getRangeFromInputs() {
   try {
-    const startIso = parseIstInput(dom.startInput.value, false);
-    const endIso = parseIstInput(dom.endInput.value, true);
-
+    const startIso = parseInputToUtcIso(dom.startInput.value, false);
+    const endIso = parseInputToUtcIso(dom.endInput.value, true);
     if (new Date(startIso) >= new Date(endIso)) {
       throw new Error("Start time must be before end time.");
     }
-
     return { startIso, endIso };
   } catch (err) {
     showError(err.message || "Invalid date range");
@@ -150,18 +119,19 @@ function ratingClass(score) {
 
 function formatLastSeen(iso) {
   if (!iso) return { date: "--", time: "--" };
-  const dateObj = new Date(iso);
-  if (Number.isNaN(dateObj.getTime())) return { date: "--", time: "--" };
-  const date = dateObj.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  const time = dateObj.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return { date, time };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: "--", time: "--" };
+  return {
+    date: d.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }),
+    time: d.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
 }
 
 function renderTable() {
@@ -179,7 +149,6 @@ function renderTable() {
   const sorted = [...filtered].sort((a, b) => {
     const va = getSortValue(a, sortKey);
     const vb = getSortValue(b, sortKey);
-
     if (typeof va === "number" && typeof vb === "number") {
       return (va - vb) * dir;
     }
@@ -188,7 +157,7 @@ function renderTable() {
 
   dom.visibleAgentsCount.textContent = sorted.length;
 
-  if (sorted.length === 0) {
+  if (!sorted.length) {
     const row = document.createElement("tr");
     row.innerHTML =
       '<td class="no-data" colspan="9">No data for this range</td>';
@@ -198,8 +167,8 @@ function renderTable() {
   }
 
   sorted.forEach((agent) => {
-    const row = document.createElement("tr");
     const lastSeen = formatLastSeen(agent.last_seen_iso);
+    const row = document.createElement("tr");
     row.innerHTML = `
       <td>
         <div class="agent">
@@ -258,8 +227,6 @@ function updateSortIndicators() {
   });
 }
 
-
-
 function updateSummaryCards(totals, totalAgents) {
   const totalTickets = Number(totals?.total_tickets);
   dom.totalTicketsValue.textContent = Number.isFinite(totalTickets)
@@ -276,7 +243,7 @@ function updateSummaryCards(totals, totalAgents) {
 
 function updateLastUpdated() {
   const now = new Date();
-  dom.lastUpdated.textContent = `ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Updated ${now.toLocaleTimeString()}`;
+  dom.lastUpdated.textContent = `• Updated ${now.toLocaleTimeString()}`;
 }
 
 async function fetchData(startIso, endIso) {
@@ -320,7 +287,7 @@ async function fetchData(startIso, endIso) {
 function formatDateRange(startIso, endIso) {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleDateString()} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${end.toLocaleDateString()}`;
+  return `${start.toLocaleDateString()} -> ${end.toLocaleDateString()}`;
 }
 
 function handleQuickRange(hours) {
@@ -349,18 +316,21 @@ function exportToCsv() {
     "Hours Active",
   ];
 
-  const rows = agentsData.map((a) => [
-    a.agent_name,
-    a.ticket_activity,
-    a.agent_email,
-    a.closed_tickets,
-    a.median_reply_time,
-    a.median_first_reply,
-    a.average_rating,
-    formatLastSeen(a.last_seen_iso).date,
-    formatLastSeen(a.last_seen_iso).time,
-    a.hours_active,
-  ]);
+  const rows = agentsData.map((a) => {
+    const lastSeen = formatLastSeen(a.last_seen_iso);
+    return [
+      a.agent_name,
+      a.ticket_activity,
+      a.agent_email,
+      a.closed_tickets,
+      a.median_reply_time,
+      a.median_first_reply,
+      a.average_rating,
+      lastSeen.date,
+      lastSeen.time,
+      a.hours_active,
+    ];
+  });
 
   const csv = [headers.join(","), ...rows.map((r) => r.map(csvEscape).join(","))]
     .join("\n")
@@ -425,9 +395,7 @@ function bindEvents() {
   });
 
   dom.agentSearch.addEventListener("input", () => renderTable());
-
   document.getElementById("exportBtn").addEventListener("click", exportToCsv);
-
   dom.autoRefresh.addEventListener("change", (e) => {
     setAutoRefresh(e.target.checked);
   });
@@ -435,7 +403,6 @@ function bindEvents() {
 
 function init() {
   bindEvents();
-  // Default: load last 1 hour window (local-time inputs, UTC query)
   const endUtc = new Date();
   const startUtc = new Date(endUtc.getTime() - 60 * 60 * 1000);
   setInputsForRange(startUtc, endUtc);
