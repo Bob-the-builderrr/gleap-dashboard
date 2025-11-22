@@ -1,14 +1,63 @@
 /* Add to existing CSS */
 
-/* Team Performance Styles */
-.date-picker-section {
+/* Time Filters Section */
+.time-filters-section {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 20px;
+  padding: 15px;
   background: #f8f9fa;
-  padding: 20px;
   border-radius: 8px;
-  margin-bottom: 25px;
-  border-left: 4px solid #007bff;
+  flex-wrap: wrap;
 }
 
+.time-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-filter-group label {
+  font-weight: bold;
+  color: #333;
+  white-space: nowrap;
+}
+
+.time-filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+}
+
+/* Section Headers with Refresh Buttons */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #eee;
+}
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.refresh-btn:hover {
+  background: #218838;
+}
+
+/* Team Performance Date Inputs */
 .date-inputs {
   display: flex;
   gap: 15px;
@@ -20,6 +69,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 200px;
 }
 
 .date-input label {
@@ -35,45 +85,7 @@
   font-size: 14px;
 }
 
-.load-btn {
-  padding: 8px 20px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  height: fit-content;
-}
-
-.load-btn:hover {
-  background: #0056b3;
-}
-
-.date-note {
-  margin-top: 10px;
-  color: #666;
-}
-
-.performance-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #eee;
-}
-
-.agent-count {
-  font-size: 16px;
-  color: #007bff;
-}
-
-.performance-table-container {
-  overflow-x: auto;
-  margin-bottom: 25px;
-}
-
+/* Simplified Performance Table */
 .performance-table {
   width: 100%;
   background: white;
@@ -98,93 +110,19 @@
   text-align: center;
 }
 
-.agent-cell {
-  text-align: left !important;
-}
-
-.agent-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.agent-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.agent-name {
-  font-weight: bold;
-  color: #333;
-}
-
-.agent-email {
-  font-size: 12px;
-  color: #666;
-}
-
-.metric-cell {
-  font-weight: bold;
-  color: #007bff;
-}
-
-.time-cell {
-  font-family: monospace;
-  background: #f8f9fa;
-  border-radius: 4px;
-  padding: 4px 8px;
-}
-
-.rating-cell {
-  font-weight: bold;
-  color: #28a745;
-}
-
-.performance-summary {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
-.summary-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-  margin-top: 10px;
-}
-
-.summary-stat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  background: white;
-  border-radius: 6px;
-  border-left: 4px solid #007bff;
-}
-
-.stat-label {
-  font-weight: bold;
-  color: #333;
-}
-
-.stat-value {
-  font-size: 18px;
-  font-weight: bold;
-  color: #007bff;
-}
-
-.no-data {
-  text-align: center;
-  padding: 40px;
-  color: #666;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
+  .time-filters-section {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  
   .date-inputs {
     flex-direction: column;
     align-items: stretch;
@@ -192,10 +130,5 @@
   
   .performance-table {
     font-size: 12px;
-  }
-  
-  .performance-table th,
-  .performance-table td {
-    padding: 8px 4px;
   }
 }

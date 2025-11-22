@@ -2,18 +2,26 @@ import fetch from 'node-fetch';
 
 // Helper function to convert seconds to readable time
 function formatTime(seconds, unit) {
-  if (!seconds || seconds === '--' || seconds === null) return '--';
+  if (!seconds || seconds === '--' || seconds === null || seconds === 0) return '--';
   
-  if (unit === 's') {
-    const minutes = Math.round(seconds / 60);
-    const hours = Math.round(minutes / 60);
+  // If it's already a string like "--", return as is
+  if (typeof seconds === 'string') return seconds;
+  
+  // Convert to number
+  const secs = Number(seconds);
+  if (isNaN(secs)) return '--';
+  
+  if (unit === 's' || (!unit && secs > 0)) {
+    const minutes = Math.round(secs / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
     
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (hours > 0) return `${hours}h ${remainingMinutes}m`;
     if (minutes > 0) return `${minutes}m`;
-    return `${seconds}s`;
+    return `${secs}s`;
   }
   
-  return seconds;
+  return seconds.toString();
 }
 
 export default async function handler(req, res) {
