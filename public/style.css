@@ -1,66 +1,60 @@
 body {
-  margin: 0;
-  padding: 0;
-  background: #f5f6fa;
-  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: "Inter", sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
 }
 
 .container {
-  width: 90%;
-  margin: 30px auto;
+  max-width: 1200px;
+  width: 100%;
 }
 
 h1 {
   text-align: center;
+  color: #38bdf8;
   margin-bottom: 20px;
 }
 
-.date-box {
+.controls, .quick {
   display: flex;
-  gap: 10px;
   justify-content: center;
-  margin-bottom: 20px;
-}
-
-input, button {
-  padding: 10px;
-  font-size: 14px;
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
 button {
-  background: #1a73e8;
-  color: white;
+  background: #2563eb;
   border: none;
+  padding: 8px 14px;
+  color: #fff;
+  border-radius: 6px;
   cursor: pointer;
 }
 
 button:hover {
-  background: #145ec2;
-}
-
-.hidden {
-  display: none;
-}
-
-#loading {
-  text-align: center;
-  font-size: 18px;
-  margin-top: 10px;
+  background: #1d4ed8;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 15px;
-  background: white;
+  margin-top: 20px;
 }
 
-table th, table td {
-  border: 1px solid #ddd;
-  padding: 8px;
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #1e293b;
+  text-align: center;
 }
 
-table th {
-  background: #333;
-  color: white;
+th {
+  background: #1e293b;
+  color: #93c5fd;
+}
+
+tr:hover {
+  background: #1e3a8a;
 }
