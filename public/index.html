@@ -1,94 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gleap Team Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Performance Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div>
-        <h1>Team Performance Dashboard</h1>
-        <div class="subtitle">Real-time agent performance metrics</div>
-      </div>
-      <div class="logo">
-        <div class="logo-icon">G</div>
-        <span>Turso Cloud</span>
-      </div>
+  <div class="app-shell">
+    <header class="top-bar">
+      <h1>Team Performance Dashboard</h1>
+      <p id="rangeLabel" class="range-label"></p>
     </header>
 
-    <div class="date-controls">
+    <section class="controls-section">
       <div class="date-row">
-        <div class="date-group">
-          <label for="startDate">Start Date</label>
-          <input type="date" id="startDate" class="date-input">
+        <div class="field-group">
+          <label for="startDate">Start date</label>
+          <input type="date" id="startDate" />
         </div>
-        <div class="date-group">
-          <label for="startTime">Start Time</label>
-          <input type="time" id="startTime" class="date-input" value="00:00">
+        <div class="field-group">
+          <label for="endDate">End date</label>
+          <input type="date" id="endDate" />
         </div>
-        <div class="date-group">
-          <label for="endDate">End Date</label>
-          <input type="date" id="endDate" class="date-input">
+        <div class="field-group">
+          <label for="startTime">Start time (optional)</label>
+          <input type="time" id="startTime" />
         </div>
-        <div class="date-group">
-          <label for="endTime">End Time</label>
-          <input type="time" id="endTime" class="date-input" value="23:59">
+        <div class="field-group">
+          <label for="endTime">End time (optional)</label>
+          <input type="time" id="endTime" />
         </div>
-        <button id="applyDates" class="btn-primary">Apply Dates</button>
-        <button id="lastHour" class="btn-secondary">Last Hour</button>
-        <button id="today" class="btn-secondary">Today</button>
+        <button id="fetchBtn" class="primary-btn">Fetch Data</button>
       </div>
-      <div class="timezone" id="timezoneInfo">Timezone: Auto-detected</div>
-    </div>
 
-    <div class="stats">
-      <div class="stat-card">
-        <h3>Total Agents</h3>
-        <div class="stat-value" id="totalAgents">0</div>
+      <div class="quick-row">
+        <span>Quick ranges:</span>
+        <button class="chip" data-hours="1">Last 1 Hour</button>
+        <button class="chip" data-hours="2">Last 2 Hours</button>
+        <button class="chip" data-hours="4">Last 4 Hours</button>
       </div>
-      <div class="stat-card">
-        <h3>Total Tickets</h3>
-        <div class="stat-value" id="totalTickets">0</div>
-      </div>
-      <div class="stat-card">
-        <h3>Closed Tickets</h3>
-        <div class="stat-value" id="closedTickets">0</div>
-      </div>
-      <div class="stat-card">
-        <h3>Avg Response Time</h3>
-        <div class="stat-value" id="avgResponseTime">0m</div>
-      </div>
-    </div>
+    </section>
 
-    <div class="controls">
-      <input type="text" class="search" id="searchInput" placeholder="Search agents...">
-      <button class="filter-btn active" data-filter="all">All Agents</button>
-      <button class="filter-btn" data-filter="high">Top Performers</button>
-      <button class="filter-btn" data-filter="active">Most Active</button>
-    </div>
+    <section class="cards-section">
+      <div class="summary-card">
+        <div class="label">Total Tickets</div>
+        <div class="value" id="totalTickets">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Average Rating</div>
+        <div class="value" id="averageRating">--</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Active Agents</div>
+        <div class="value" id="totalAgents">--</div>
+      </div>
+    </section>
 
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th class="sortable" data-sort="agent">Agent</th>
-            <th class="sortable" data-sort="total">Total Tickets</th>
-            <th class="sortable" data-sort="closed">Closed</th>
-            <th class="sortable" data-sort="response">Response Time</th>
-            <th class="sortable" data-sort="rating">Rating</th>
-            <th class="sortable" data-sort="activity">Activity</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody">
-          <tr>
-            <td colspan="6" class="loading">Loading team performance data...</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <section class="table-section">
+      <div class="table-wrapper">
+        <table id="resultTable">
+          <thead>
+            <tr>
+              <th data-sort-key="agent_name" class="sortable">Agent</th>
+              <th data-sort-key="total_tickets" class="sortable sorted-desc">
+                Total Tickets
+              </th>
+              <th data-sort-key="closed_tickets" class="sortable">Closed</th>
+              <th>Median Reply</th>
+              <th>First Reply</th>
+              <th>Assign Reply</th>
+              <th>Last Close</th>
+              <th data-sort-key="average_rating_value" class="sortable">Rating</th>
+              <th data-sort-key="ticket_activity" class="sortable">Activity</th>
+              <th>Hours Active</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
   <script src="dashboard.js"></script>
