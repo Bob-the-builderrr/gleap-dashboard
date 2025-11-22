@@ -1,163 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Gleap Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gleap Dashboard - Team Performance</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<h1>Gleap Live Ticket Dashboard</h1>
-
-<!-- TIME FILTERS SECTION -->
-<div class="time-filters-section">
-  <div class="time-filter-group">
-    <label>Archived Tickets Time Window: </label>
-    <select id="timeWindow" onchange="loadArchived()">
-      <option value="30m">Last 30 minutes</option>
-      <option value="1h">Last 1 hour</option>
-      <option value="2h">Last 2 hours</option>
-      <option value="8h">Last 8 hours</option>
-    </select>
-  </div>
-
-  <div class="time-filter-group">
-    <label>Team Performance Time Window: </label>
-    <select id="teamTimeWindow" onchange="loadTeamPerformanceWithPreset()">
-      <option value="custom">Custom Range</option>
-      <option value="30m">Last 30 minutes</option>
-      <option value="1h">Last 1 hour</option>
-      <option value="2h">Last 2 hours</option>
-      <option value="8h">Last 8 hours</option>
-      <option value="24h">Last 24 hours</option>
-      <option value="7d">Last 7 days</option>
-    </select>
-  </div>
-</div>
-
-<!-- TAB BUTTONS -->
-<div class="tabs">
-  <button class="tab active" onclick="showTab('all')">All Tickets</button>
-  <button class="tab" onclick="showTab('archived')">Archived Tickets</button>
-  <button class="tab" onclick="showTab('plans')">Plan Summary</button>
-  <button class="tab" onclick="showTab('team')">Team Performance</button>
-</div>
-
-<!-- DASHBOARD SUMMARY -->
-<div class="summary-section">
-  <div class="summary-box">
-    <h3>Total Tickets</h3>
-    <p id="totalTickets">0</p>
-  </div>
-
-  <div class="summary-box">
-    <h3>Plan Breakdown</h3>
-    <div id="planBreakdown"></div>
-  </div>
-
-  <!-- STATISTICS BOX -->
-  <div class="summary-box">
-    <h3>Response Times (Last Hour)</h3>
-    <div id="statistics">
-      <p>Loading statistics...</p>
-    </div>
-  </div>
-</div>
-
-<!-- ALL TICKETS TAB -->
-<div id="allTab">
-  <div class="section">
-    <div class="section-header">
-      <h2>All Tickets</h2>
-      <button onclick="loadAllTickets()" class="refresh-btn">🔄 Refresh</button>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Agent</th>
-          <th>Open Tickets</th>
-          <th>Priority</th>
-          <th>Status</th>
-          <th>Duration</th>
-          <th>User Email</th>
-          <th>Plan</th>
-          <th>Tags</th>
-        </tr>
-      </thead>
-      <tbody id="ticketRows"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ARCHIVED TICKETS TAB -->
-<div id="archivedTab" style="display:none;">
-  <div class="section">
-    <div class="section-header">
-      <h2>Archived Tickets</h2>
-      <button onclick="loadArchived()" class="refresh-btn">🔄 Refresh</button>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Agent Name</th>
-          <th>Agent Email</th>
-          <th>Ticket ID</th>
-          <th>Total Count</th>
-          <th>Archived Date (IST)</th>
-          <th>Archived Time (IST)</th>
-        </tr>
-      </thead>
-      <tbody id="archivedRows"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- PLAN SUMMARY TAB -->
-<div id="plansTab" style="display:none;">
-  <div class="section">
-    <div class="section-header">
-      <h2>Plan Summary Analysis</h2>
-      <button onclick="loadPlanSummary()" class="refresh-btn">🔄 Refresh</button>
-    </div>
-    <div id="planSummary">
-      <p>Loading plan summary...</p>
-    </div>
-  </div>
-</div>
-
-<!-- TEAM PERFORMANCE TAB -->
-<div id="teamTab" style="display:none;">
-  <div class="section">
-    <div class="section-header">
-      <h2>Team Performance</h2>
-      <button onclick="loadTeamPerformanceWithPreset()" class="refresh-btn">🔄 Refresh</button>
-    </div>
-    
-    <!-- Date Picker Section -->
-    <div class="date-picker-section">
-      <div class="date-inputs">
-        <div class="date-input">
-          <label for="startDate">Start Date & Time (IST):</label>
-          <input type="datetime-local" id="startDate">
-        </div>
-        <div class="date-input">
-          <label for="endDate">End Date & Time (IST):</label>
-          <input type="datetime-local" id="endDate">
-        </div>
-        <button onclick="loadTeamPerformanceWithCustom()" class="load-btn">Load Performance Data</button>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Gleap Team Performance Dashboard</h1>
+        <div class="subtitle">Real-time agent performance metrics and analytics</div>
       </div>
-      <div class="date-note">
-        <small>Using preset time window above for quick analysis, or set custom date/time range.</small>
+      <div class="logo">
+        <div class="logo-icon">G</div>
+        <div>Turso Cloud</div>
+      </div>
+    </header>
+
+    <div class="dashboard-stats">
+      <div class="stat-card">
+        <h3>Total Agents Active</h3>
+        <div class="stat-value" id="totalAgents">0</div>
+        <div class="subtitle">Currently handling tickets</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Total Open Tickets</h3>
+        <div class="stat-value" id="totalTickets">0</div>
+        <div class="subtitle">Across all agents</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Avg Response Time</h3>
+        <div class="stat-value" id="avgResponseTime">0m</div>
+        <div class="subtitle">Team average</div>
+      </div>
+
+      <div class="stat-card">
+        <h3>Satisfaction Score</h3>
+        <div class="stat-value" id="satisfactionScore">0%</div>
+        <div class="subtitle">Customer rating</div>
       </div>
     </div>
 
-    <!-- Performance Data -->
-    <div id="teamPerformance">
-      <p>Select a time window or set custom dates and click "Load Performance Data".</p>
+    <div class="dashboard-controls">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <input type="text" id="searchInput" placeholder="Search agents...">
+      </div>
+      <div class="filter-controls">
+        <button class="filter-btn active" data-filter="all">All Agents</button>
+        <button class="filter-btn" data-filter="enterprise">Enterprise</button>
+        <button class="filter-btn" data-filter="high">High Performers</button>
+        <button class="filter-btn" data-filter="needs">Needs Attention</button>
+      </div>
     </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="agent">Agent</th>
+            <th class="sortable" data-sort="open">Open Tickets</th>
+            <th class="sortable" data-sort="closed">Closed Today</th>
+            <th class="sortable" data-sort="response">Avg Response</th>
+            <th class="sortable" data-sort="satisfaction">Satisfaction</th>
+            <th class="sortable" data-sort="plan">Plan Focus</th>
+            <th>Performance</th>
+          </tr>
+        </thead>
+        <tbody id="performanceRows">
+          <!-- Performance rows will be populated here -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="charts-container">
+      <div class="chart-card">
+        <h3>Ticket Distribution by Agent</h3>
+        <div id="ticketsChart" class="chart-placeholder">
+          <div class="chart-bars">
+            <!-- Chart bars will be populated here -->
+          </div>
+        </div>
+      </div>
+      
+      <div class="chart-card">
+        <h3>Satisfaction Scores</h3>
+        <div id="satisfactionChart" class="chart-placeholder">
+          <div class="satisfaction-bars">
+            <!-- Satisfaction bars will be populated here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Gleap Team Dashboard • Updated just now • Powered by Turso Cloud
+    </footer>
   </div>
-</div>
 
-<script src="dashboard.js"></script>
-
+  <script src="dashboard.js"></script>
 </body>
 </html>

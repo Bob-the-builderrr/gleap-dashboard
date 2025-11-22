@@ -1,293 +1,357 @@
-/* ============================
-   TIME HELPER FUNCTIONS
-============================ */
-function getISTDateTimeString(date = new Date()) {
-  return date.toLocaleString('en-IN', { 
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).replace(/(\d+)\/(\d+)\/(\d+),?/, '$3-$2-$1').replace(' ', 'T');
-}
-
-function getUTCDateTimeFromIST(istDateTimeString) {
-  // Convert IST datetime string to UTC
-  const [datePart, timePart] = istDateTimeString.split('T');
-  const [year, month, day] = datePart.split('-');
-  const [hours, minutes, seconds] = timePart.split(':');
-  
-  // Create date in IST timezone
-  const istDate = new Date(`${month}/${day}/${year} ${hours}:${minutes}:${seconds} GMT+0530`);
-  
-  // Convert to UTC
-  return istDate.toISOString();
-}
-
-function calculateTimeRange(preset) {
-  const now = new Date();
-  let startTime = new Date();
-  
-  switch(preset) {
-    case '30m':
-      startTime.setMinutes(now.getMinutes() - 30);
-      break;
-    case '1h':
-      startTime.setHours(now.getHours() - 1);
-      break;
-    case '2h':
-      startTime.setHours(now.getHours() - 2);
-      break;
-    case '8h':
-      startTime.setHours(now.getHours() - 8);
-      break;
-    case '24h':
-      startTime.setDate(now.getDate() - 1);
-      break;
-    case '7d':
-      startTime.setDate(now.getDate() - 7);
-      break;
-    default:
-      startTime.setHours(now.getHours() - 1); // Default to 1 hour
+// Mock data for team performance
+const mockData = [
+  {
+    Agent_Name: "Alex Johnson",
+    Agent_Open_Ticket: 5,
+    Tickets_Closed_Today: 12,
+    Avg_Response_Time: "8 minutes",
+    Satisfaction_Score: "94%",
+    Plan_Type: "Enterprise"
+  },
+  {
+    Agent_Name: "Maria Garcia",
+    Agent_Open_Ticket: 3,
+    Tickets_Closed_Today: 15,
+    Avg_Response_Time: "6 minutes",
+    Satisfaction_Score: "98%",
+    Plan_Type: "Professional"
+  },
+  {
+    Agent_Name: "David Smith",
+    Agent_Open_Ticket: 7,
+    Tickets_Closed_Today: 8,
+    Avg_Response_Time: "15 minutes",
+    Satisfaction_Score: "82%",
+    Plan_Type: "Starter"
+  },
+  {
+    Agent_Name: "Sarah Williams",
+    Agent_Open_Ticket: 2,
+    Tickets_Closed_Today: 18,
+    Avg_Response_Time: "4 minutes",
+    Satisfaction_Score: "96%",
+    Plan_Type: "Enterprise"
+  },
+  {
+    Agent_Name: "James Brown",
+    Agent_Open_Ticket: 4,
+    Tickets_Closed_Today: 10,
+    Avg_Response_Time: "12 minutes",
+    Satisfaction_Score: "85%",
+    Plan_Type: "Professional"
+  },
+  {
+    Agent_Name: "Lisa Chen",
+    Agent_Open_Ticket: 6,
+    Tickets_Closed_Today: 14,
+    Avg_Response_Time: "7 minutes",
+    Satisfaction_Score: "92%",
+    Plan_Type: "Enterprise"
   }
-  
-  return {
-    start: getUTCDateTimeFromIST(getISTDateTimeString(startTime)),
-    end: getUTCDateTimeFromIST(getISTDateTimeString(now))
-  };
+];
+
+// Global variables
+let currentData = [...mockData];
+let currentSort = { column: null, direction: 'asc' };
+let currentFilter = 'all';
+
+// Function to parse response time
+function parseResponseTime(timeStr) {
+  if (!timeStr) return 0;
+  const match = timeStr.match(/(\d+)\s*minutes?/);
+  return match ? parseInt(match[1]) : 0;
 }
 
-/* ============================
-   TAB SWITCHING FUNCTION
-============================ */
-function showTab(name) {
-  document.getElementById("allTab").style.display =
-    name === "all" ? "block" : "none";
-  document.getElementById("archivedTab").style.display =
-    name === "archived" ? "block" : "none";
-  document.getElementById("plansTab").style.display =
-    name === "plans" ? "block" : "none";
-  document.getElementById("teamTab").style.display =
-    name === "team" ? "block" : "none";
+// Function to parse satisfaction score
+function parseSatisfaction(scoreStr) {
+  if (!scoreStr) return 0;
+  const match = scoreStr.match(/(\d+)%/);
+  return match ? parseInt(match[1]) : 0;
+}
 
-  document.querySelectorAll(".tab").forEach(btn =>
-    btn.classList.remove("active")
+// Function to calculate team statistics
+function calculateTeamStats(data) {
+  const totalAgents = data.length;
+  const totalTickets = data.reduce((sum, agent) => sum + agent.Agent_Open_Ticket, 0);
+  const avgResponseTime = Math.round(
+    data.reduce((sum, agent) => sum + parseResponseTime(agent.Avg_Response_Time), 0) / totalAgents
+  );
+  const avgSatisfaction = Math.round(
+    data.reduce((sum, agent) => sum + parseSatisfaction(agent.Satisfaction_Score), 0) / totalAgents
   );
 
-  document
-    .querySelector(`.tab[onclick="showTab('${name}')"]`)
-    .classList.add("active");
+  return { totalAgents, totalTickets, avgResponseTime, avgSatisfaction };
+}
 
-  // Refresh data when switching tabs
-  if (name === 'all') {
-    loadAllTickets();
-  } else if (name === 'archived') {
-    loadArchived();
-  } else if (name === 'plans') {
-    loadPlanSummary();
-  } else if (name === 'team') {
-    // Initialize team performance with default dates
-    initializeTeamPerformanceDates();
+// Function to determine performance level
+function getPerformanceLevel(agent) {
+  const satisfaction = parseSatisfaction(agent.Satisfaction_Score);
+  const responseTime = parseResponseTime(agent.Avg_Response_Time);
+  const ticketsClosed = agent.Tickets_Closed_Today;
+
+  if (satisfaction >= 90 && responseTime <= 8 && ticketsClosed >= 12) {
+    return "excellent";
+  } else if (satisfaction >= 85 && responseTime <= 12 && ticketsClosed >= 8) {
+    return "good";
+  } else {
+    return "needs-improvement";
   }
 }
 
-/* ============================
-   INITIALIZE TEAM PERFORMANCE DATES
-============================ */
-function initializeTeamPerformanceDates() {
-  const now = new Date();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  
-  // Set default values for datetime-local inputs
-  document.getElementById('startDate').value = getISTDateTimeString(oneHourAgo).slice(0, 16);
-  document.getElementById('endDate').value = getISTDateTimeString(now).slice(0, 16);
+// Function to determine satisfaction class
+function getSatisfactionClass(score) {
+  const satisfaction = parseSatisfaction(score);
+  if (satisfaction >= 90) return "high";
+  if (satisfaction >= 80) return "medium";
+  return "low";
 }
 
-/* ============================
-   LOAD TEAM PERFORMANCE WITH PRESET
-============================ */
-async function loadTeamPerformanceWithPreset() {
-  const preset = document.getElementById('teamTimeWindow').value;
-  
-  if (preset === 'custom') {
-    // Show custom date inputs but don't load data
-    return;
-  }
-  
-  const timeRange = calculateTimeRange(preset);
-  
-  try {
-    console.log(`Loading team performance for preset: ${preset}`, timeRange);
-
-    const performanceDiv = document.getElementById("teamPerformance");
-    performanceDiv.innerHTML = '<p>Loading team performance data...</p>';
-
-    const res = await fetch(`/api/team-performance?startDate=${timeRange.start}&endDate=${timeRange.end}`);
-    const data = await res.json();
-
-    console.log("Team performance response:", data);
-
-    if (data.error) {
-      performanceDiv.innerHTML = `<p style="color: red;">Error loading team performance: ${data.details}</p>`;
-      return;
-    }
-
-    displayTeamPerformance(data, `${preset} window`);
-
-  } catch (err) {
-    console.error("Error loading team performance:", err);
-    document.getElementById("teamPerformance").innerHTML = 
-      `<p style="color: red;">Error loading team performance: ${err.message}</p>`;
-  }
+// Function to determine response time class
+function getResponseTimeClass(time) {
+  const responseTime = parseResponseTime(time);
+  if (responseTime <= 8) return "fast";
+  if (responseTime <= 12) return "average";
+  return "slow";
 }
 
-/* ============================
-   LOAD TEAM PERFORMANCE WITH CUSTOM DATES
-============================ */
-async function loadTeamPerformanceWithCustom() {
-  const startDate = document.getElementById('startDate').value;
-  const endDate = document.getElementById('endDate').value;
-  
-  if (!startDate || !endDate) {
-    alert('Please select both start and end dates');
-    return;
-  }
+// Function to render performance rows
+function renderPerformanceRows(data) {
+  const tbody = document.getElementById("performanceRows");
+  tbody.innerHTML = "";
 
-  // Convert IST datetime to UTC
-  const startIST = startDate + ':00';
-  const endIST = endDate + ':00';
-  
-  const startUTC = getUTCDateTimeFromIST(startIST);
-  const endUTC = getUTCDateTimeFromIST(endIST);
-
-  try {
-    console.log(`Loading team performance for custom range: ${startUTC} to ${endUTC}`);
-
-    const performanceDiv = document.getElementById("teamPerformance");
-    performanceDiv.innerHTML = '<p>Loading team performance data...</p>';
-
-    const res = await fetch(`/api/team-performance?startDate=${startUTC}&endDate=${endUTC}`);
-    const data = await res.json();
-
-    console.log("Team performance response:", data);
-
-    if (data.error) {
-      performanceDiv.innerHTML = `<p style="color: red;">Error loading team performance: ${data.details}</p>`;
-      return;
-    }
-
-    const rangeLabel = `${startDate} to ${endDate}`;
-    displayTeamPerformance(data, rangeLabel);
-
-  } catch (err) {
-    console.error("Error loading team performance:", err);
-    document.getElementById("teamPerformance").innerHTML = 
-      `<p style="color: red;">Error loading team performance: ${err.message}</p>`;
-  }
-}
-
-/* ============================
-   DISPLAY TEAM PERFORMANCE
-============================ */
-function displayTeamPerformance(data, rangeLabel) {
-  const performanceDiv = document.getElementById("teamPerformance");
-  
-  if (data.agents.length === 0) {
-    performanceDiv.innerHTML = `
-      <div class="no-data">
-        <h3>No performance data found</h3>
-        <p>No team performance data available for the selected time range.</p>
-      </div>
+  if (data.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 40px;">
+          No agents match your current filters
+        </td>
+      </tr>
     `;
     return;
   }
 
-  performanceDiv.innerHTML = `
-    <div class="performance-header">
-      <h3>📈 Team Performance (${rangeLabel})</h3>
-      <div class="agent-count">Total Agents: <strong>${data.total_agents}</strong></div>
-    </div>
+  data.forEach(agent => {
+    const performanceLevel = getPerformanceLevel(agent);
+    const satisfactionClass = getSatisfactionClass(agent.Satisfaction_Score);
+    const responseTimeClass = getResponseTimeClass(agent.Avg_Response_Time);
 
-    <div class="performance-table-container">
-      <table class="performance-table">
-        <thead>
-          <tr>
-            <th>Agent</th>
-            <th>Total Tickets</th>
-            <th>Closed</th>
-            <th>Comments</th>
-            <th>Median Reply</th>
-            <th>First Reply</th>
-            <th>Rating</th>
-            <th>Activity</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.agents.map(agent => `
-            <tr>
-              <td class="agent-cell">
-                <div class="agent-info">
-                  ${agent.profile_image ? `<img src="${agent.profile_image}" alt="${agent.agent_name}" class="agent-avatar">` : ''}
-                  <div>
-                    <div class="agent-name">${agent.agent_name}</div>
-                    <div class="agent-email">${agent.agent_email}</div>
-                  </div>
-                </div>
-              </td>
-              <td class="metric-cell"><strong>${agent.total_tickets}</strong></td>
-              <td class="metric-cell">${agent.closed_tickets}</td>
-              <td class="metric-cell">${agent.comments_count}</td>
-              <td class="time-cell">${agent.median_reply_time}</td>
-              <td class="time-cell">${agent.median_first_reply}</td>
-              <td class="rating-cell">${agent.average_rating}</td>
-              <td class="metric-cell" title="Ticket activity count">${agent.ticket_activity}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="performance-summary">
-      <h4>Performance Summary:</h4>
-      <div class="summary-stats">
-        <div class="summary-stat">
-          <span class="stat-label">Total Tickets Handled:</span>
-          <span class="stat-value">${data.agents.reduce((sum, agent) => sum + agent.total_tickets, 0)}</span>
-        </div>
-        <div class="summary-stat">
-          <span class="stat-label">Total Closed:</span>
-          <span class="stat-value">${data.agents.reduce((sum, agent) => sum + agent.closed_tickets, 0)}</span>
-        </div>
-        <div class="summary-stat">
-          <span class="stat-label">Active Agents:</span>
-          <span class="stat-value">${data.agents.filter(agent => agent.total_tickets > 0).length}</span>
-        </div>
-      </div>
-    </div>
-  `;
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${agent.Agent_Name}</strong></td>
+        <td>${agent.Agent_Open_Ticket}</td>
+        <td>${agent.Tickets_Closed_Today}</td>
+        <td><span class="response-time ${responseTimeClass}">${agent.Avg_Response_Time}</span></td>
+        <td><span class="satisfaction ${satisfactionClass}">${agent.Satisfaction_Score}</span></td>
+        <td>${agent.Plan_Type}</td>
+        <td><span class="performance ${performanceLevel}">${performanceLevel.replace('-', ' ')}</span></td>
+      </tr>
+    `;
+  });
 }
 
-/* ============================
-   INITIAL LOAD
-============================ */
-loadAllTickets();
-loadArchived();
-loadStatistics();
-initializeTeamPerformanceDates(); // Initialize team performance dates
+// Function to update statistics
+function updateStatistics(data) {
+  const stats = calculateTeamStats(data);
+  document.getElementById("totalAgents").innerText = stats.totalAgents;
+  document.getElementById("totalTickets").innerText = stats.totalTickets;
+  document.getElementById("avgResponseTime").innerText = `${stats.avgResponseTime}m`;
+  document.getElementById("satisfactionScore").innerText = `${stats.avgSatisfaction}%`;
+}
 
-// Auto-refresh every 30 seconds
-setInterval(() => {
-  const activeTab = document.querySelector('.tab.active').getAttribute('onclick');
-  if (activeTab.includes("'all'")) {
-    loadAllTickets();
-  } else if (activeTab.includes("'archived'")) {
-    loadArchived();
-  } else if (activeTab.includes("'plans'")) {
-    loadPlanSummary();
+// Function to render charts
+function renderCharts(data) {
+  // Tickets distribution chart
+  const ticketsChart = document.querySelector('#ticketsChart .chart-bars');
+  ticketsChart.innerHTML = "";
+
+  data.forEach(agent => {
+    const maxTickets = Math.max(...data.map(a => a.Agent_Open_Ticket));
+    const height = (agent.Agent_Open_Ticket / maxTickets) * 100;
+    
+    ticketsChart.innerHTML += `
+      <div class="chart-bar" style="height: ${height}%">
+        <div class="chart-bar-label">${agent.Agent_Name.split(' ')[0]}</div>
+      </div>
+    `;
+  });
+
+  // Satisfaction chart
+  const satisfactionChart = document.querySelector('#satisfactionChart .satisfaction-bars');
+  satisfactionChart.innerHTML = "";
+
+  data.forEach(agent => {
+    const satisfaction = parseSatisfaction(agent.Satisfaction_Score);
+    const height = satisfaction;
+    
+    satisfactionChart.innerHTML += `
+      <div class="satisfaction-bar" style="height: ${height}%">
+        <div class="satisfaction-bar-label">${agent.Agent_Name.split(' ')[0]}</div>
+      </div>
+    `;
+  });
+}
+
+// Sorting functionality
+function setupSorting() {
+  const sortableHeaders = document.querySelectorAll('th.sortable');
+  
+  sortableHeaders.forEach(header => {
+    header.addEventListener('click', () => {
+      const column = header.getAttribute('data-sort');
+      
+      // Reset other headers
+      sortableHeaders.forEach(h => {
+        if (h !== header) {
+          h.classList.remove('asc', 'desc');
+        }
+      });
+      
+      // Toggle direction if same column
+      if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+      }
+      
+      // Update UI
+      header.classList.remove('asc', 'desc');
+      header.classList.add(currentSort.direction);
+      
+      // Sort data
+      sortData();
+    });
+  });
+}
+
+// Function to sort data based on current sort settings
+function sortData() {
+  const sortedData = [...currentData].sort((a, b) => {
+    let aValue, bValue;
+    
+    switch(currentSort.column) {
+      case 'agent':
+        aValue = a.Agent_Name;
+        bValue = b.Agent_Name;
+        break;
+      case 'open':
+        aValue = a.Agent_Open_Ticket;
+        bValue = b.Agent_Open_Ticket;
+        break;
+      case 'closed':
+        aValue = a.Tickets_Closed_Today;
+        bValue = b.Tickets_Closed_Today;
+        break;
+      case 'response':
+        aValue = parseResponseTime(a.Avg_Response_Time);
+        bValue = parseResponseTime(b.Avg_Response_Time);
+        break;
+      case 'satisfaction':
+        aValue = parseSatisfaction(a.Satisfaction_Score);
+        bValue = parseSatisfaction(b.Satisfaction_Score);
+        break;
+      case 'plan':
+        aValue = a.Plan_Type;
+        bValue = b.Plan_Type;
+        break;
+      default:
+        return 0;
+    }
+    
+    if (currentSort.direction === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+  
+  renderPerformanceRows(sortedData);
+  renderCharts(sortedData);
+}
+
+// Filter functionality
+function setupFiltering() {
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  
+  filterButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      // Remove active class from all buttons
+      filterButtons.forEach(btn => btn.classList.remove('active'));
+      
+      // Add active class to clicked button
+      button.classList.add('active');
+      
+      // Set current filter
+      currentFilter = button.getAttribute('data-filter');
+      
+      // Apply filter
+      applyFilter();
+    });
+  });
+}
+
+// Function to apply current filter
+function applyFilter() {
+  let filteredData = [...mockData];
+  
+  switch(currentFilter) {
+    case 'enterprise':
+      filteredData = filteredData.filter(agent => agent.Plan_Type === 'Enterprise');
+      break;
+    case 'high':
+      filteredData = filteredData.filter(agent => getPerformanceLevel(agent) === 'excellent');
+      break;
+    case 'needs':
+      filteredData = filteredData.filter(agent => getPerformanceLevel(agent) === 'needs-improvement');
+      break;
+    default:
+      // 'all' filter - no additional filtering needed
+      break;
   }
-  // Team performance doesn't auto-refresh (requires manual load)
-  loadStatistics(); // Always refresh statistics
-}, 30000);
+  
+  currentData = filteredData;
+  updateStatistics(currentData);
+  
+  // Re-apply current sort if exists
+  if (currentSort.column) {
+    sortData();
+  } else {
+    renderPerformanceRows(currentData);
+    renderCharts(currentData);
+  }
+}
+
+// Search functionality
+function setupSearch() {
+  const searchInput = document.getElementById('searchInput');
+  
+  searchInput.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    
+    if (searchTerm.length === 0) {
+      // If search is empty, revert to current filter
+      applyFilter();
+      return;
+    }
+    
+    const filteredData = currentData.filter(agent => 
+      agent.Agent_Name.toLowerCase().includes(searchTerm)
+    );
+    
+    renderPerformanceRows(filteredData);
+    renderCharts(filteredData);
+  });
+}
+
+// Initialize dashboard
+function initDashboard() {
+  updateStatistics(mockData);
+  renderPerformanceRows(mockData);
+  renderCharts(mockData);
+  setupSorting();
+  setupFiltering();
+  setupSearch();
+}
+
+// Load dashboard when page is ready
+document.addEventListener('DOMContentLoaded', initDashboard);
