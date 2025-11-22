@@ -1,86 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gleap Team Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Performance Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="container">
-    <header>
-      <div>
-        <h1>Team Performance Dashboard</h1>
-        <div class="subtitle">Monitor agent performance and metrics</div>
-      </div>
-      <div class="logo">
-        <div class="logo-icon">G</div>
-        <span>Turso Cloud</span>
-      </div>
-    </header>
-
-    <div class="date-controls">
-      <div class="date-row">
-        <div class="date-group">
-          <label for="startDate">Start Date</label>
-          <input type="date" id="startDate" class="date-input">
-        </div>
-        <div class="date-group">
-          <label for="endDate">End Date</label>
-          <input type="date" id="endDate" class="date-input">
-        </div>
-        <button id="applyDates" class="btn-primary">Apply Dates</button>
-        <button id="resetDates" class="btn-secondary">Reset</button>
-      </div>
-      <div class="timezone" id="timezoneInfo">Timezone: Auto-detected</div>
-    </div>
-
-    <div class="stats">
-      <div class="stat-card">
-        <h3>Total Agents</h3>
-        <div class="stat-value" id="totalAgents">0</div>
-      </div>
-      <div class="stat-card">
-        <h3>Total Tickets</h3>
-        <div class="stat-value" id="totalTickets">0</div>
-      </div>
-      <div class="stat-card">
-        <h3>Closed Tickets</h3>
-        <div class="stat-value" id="closedTickets">0</div>
-      </div>
-      <div class="stat-card">
-        <h3>Avg Rating</h3>
-        <div class="stat-value" id="avgRating">0</div>
-      </div>
-    </div>
+    <h1>Team Performance Dashboard</h1>
 
     <div class="controls">
-      <input type="text" class="search" id="searchInput" placeholder="Search agents by name or email...">
-      <button class="filter-btn active" data-filter="all">All Agents</button>
-      <button class="filter-btn" data-filter="high">High Performers</button>
-      <button class="filter-btn" data-filter="medium">Good</button>
-      <button class="filter-btn" data-filter="low">Needs Help</button>
+      <input type="datetime-local" id="startDate" />
+      <input type="datetime-local" id="endDate" />
+      <button id="fetchBtn">Fetch Data</button>
     </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Agent</th>
-          <th>Total Tickets</th>
-          <th>Closed</th>
-          <th>Reply Time</th>
-          <th>Rating</th>
-          <th>Performance</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody">
-        <tr>
-          <td colspan="6" class="loading">Loading team performance data...</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+    <div class="quick">
+      <button data-hours="1">Last 1 Hour</button>
+      <button data-hours="2">Last 2 Hours</button>
+      <button data-hours="4">Last 4 Hours</button>
+    </div>
 
+    <div class="cards">
+      <div class="card" id="totalTickets">Total Tickets<br><span>--</span></div>
+      <div class="card" id="averageRating">Average Rating<br><span>--</span></div>
+      <div class="card" id="totalAgents">Active Agents<br><span>--</span></div>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="resultTable">
+        <thead>
+          <tr>
+            <th data-sort="name">Agent</th>
+            <th data-sort="tickets">Total Tickets</th>
+            <th data-sort="comments">Comments</th>
+            <th data-sort="closed">Closed</th>
+            <th>Median Reply</th>
+            <th>First Reply</th>
+            <th>Assign Reply</th>
+            <th>Last Close</th>
+            <th data-sort="rating">Rating</th>
+            <th data-sort="activity">Activity</th>
+            <th>Hours Active</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
   <script src="dashboard.js"></script>
 </body>
 </html>
