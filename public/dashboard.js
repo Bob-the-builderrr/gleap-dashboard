@@ -38,65 +38,49 @@ function toIstInputValue(date) {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-function istToUtcIso(datePart, timePart, isEndOfDay) {
-  const [year, month, day] = (datePart || "").split("-").map(Number);
-  if (!year || !month || !day) throw new Error("Invalid date");
-
-  let hours = 0;
-  let minutes = 0;
-  let seconds = 0;
-  let ms = 0;
-
-  if (timePart) {
-    const [h, m = "0", sRaw = "0"] = timePart.split(":");
-    hours = Number(h);
-    minutes = Number(m);
-
-    if (String(sRaw).includes(".")) {
-      const [s, msRaw] = String(sRaw).split(".");
-      seconds = Number(s);
-      ms = Number(msRaw.padEnd(3, "0").slice(0, 3));
-    } else {
-      seconds = Number(sRaw);
-    }
-  } else if (isEndOfDay) {
-    hours = 23;
-    minutes = 59;
-    seconds = 59;
-    ms = 999;
-  }
-
-  if (
-    [hours, minutes, seconds, ms].some((v) => Number.isNaN(v)) ||
-    hours > 23 ||
-    minutes > 59 ||
-    seconds > 59
-  ) {
-    throw new Error("Invalid time");
-  }
-
-  const utcMs =
-    Date.UTC(year, month - 1, day, hours, minutes, seconds, ms) -
-    IST_OFFSET_MIN * 60 * 1000;
-  return new Date(utcMs).toISOString();
-}
-
-function normalizeToUtc(value, isEndOfDay) {
+function parseIstInput(value, isEndOfDay) {
   const trimmed = (value || "").trim();
   if (!trimmed) throw new Error("Please select both start and end dates.");
 
-  if (looksLikeIsoWithTz(trimmed)) {
-    const parsed = new Date(trimmed);
-    if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date format.");
-    return parsed.toISOString();
+  // Supports "yyyy-mm-ddThh:mm" (datetime-local) and "dd-mm-yyyy hh:mm"
+  let datePart = "";
+  let timePart = "";
+
+  if (trimmed.includes("T")) {
+    [datePart, timePart] = trimmed.split("T");
+  } else {
+    [datePart, timePart] = trimmed.split(" ");
   }
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return istToUtcIso(trimmed, null, isEndOfDay);
+  if (!timePart || timePart === "") {
+    timePart = isEndOfDay ? "23:59:59" : "00:00";
   }
 
-  const [datePart, timePart] = trimmed.split(/[T\s]/).filter(Boolean);
-  return istToUtcIso(datePart, timePart || null, isEndOfDay);
+  let year, month, day;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    [year, month, day] = datePart.split("-").map(Number);
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(datePart)) {
+    [day, month, year] = datePart.split("-").map(Number);
+  } else {
+    throw new Error("Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd.");
+  }
+
+  const [hour = 0, minute = 0, second = isEndOfDay ? 59 : 0] = timePart
+    .split(":")
+    .map(Number);
+  if (
+    [year, month, day, hour, minute, second].some((n) => Number.isNaN(n)) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  ) {
+    throw new Error("Invalid time format.");
+  }
+
+  // Build a UTC date from IST components by subtracting the IST offset
+  const istAsUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  const utcMs = istAsUtc - IST_OFFSET_MIN * 60 * 1000;
+  return new Date(utcMs).toISOString();
 }
 
 function setInputsForRange(startUtc, endUtc) {
@@ -106,8 +90,8 @@ function setInputsForRange(startUtc, endUtc) {
 
 function getRangeFromInputs() {
   try {
-    const startIso = normalizeToUtc(dom.startInput.value, false);
-    const endIso = normalizeToUtc(dom.endInput.value, true);
+    const startIso = parseIstInput(dom.startInput.value, false);
+    const endIso = parseIstInput(dom.endInput.value, true);
 
     if (new Date(startIso) >= new Date(endIso)) {
       throw new Error("Start time must be before end time.");
@@ -412,12 +396,7 @@ function bindEvents() {
 }
 
 function init() {
-  const endUtc = new Date();
-  const startUtc = new Date(endUtc.getTime() - 60 * 60 * 1000);
-  setInputsForRange(startUtc, endUtc);
-
   bindEvents();
-  fetchData(startUtc.toISOString(), endUtc.toISOString());
 }
 
 document.addEventListener("DOMContentLoaded", init);
