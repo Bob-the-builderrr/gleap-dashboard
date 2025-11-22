@@ -408,6 +408,11 @@ function bindEvents() {
 
 function init() {
   bindEvents();
+  // Default: load last 1 hour window (IST-aware inputs, UTC query)
+  const endUtc = new Date();
+  const startUtc = new Date(endUtc.getTime() - 60 * 60 * 1000);
+  setInputsForRange(startUtc, endUtc);
+  fetchData(startUtc.toISOString(), endUtc.toISOString());
 }
 
 document.addEventListener("DOMContentLoaded", init);
