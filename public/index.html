@@ -1,107 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gleap Dashboard - Team Performance</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Performance Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <div class="container">
-    <header>
-      <div>
-        <h1>Gleap Team Performance Dashboard</h1>
-        <div class="subtitle">Real-time agent performance metrics and analytics</div>
-      </div>
-      <div class="logo">
-        <div class="logo-icon">G</div>
-        <div>Turso Cloud</div>
-      </div>
-    </header>
+    <h1>Team Performance Dashboard</h1>
 
-    <div class="dashboard-stats">
-      <div class="stat-card">
-        <h3>Total Agents Active</h3>
-        <div class="stat-value" id="totalAgents">0</div>
-        <div class="subtitle">Currently handling tickets</div>
-      </div>
-
-      <div class="stat-card">
-        <h3>Total Open Tickets</h3>
-        <div class="stat-value" id="totalTickets">0</div>
-        <div class="subtitle">Across all agents</div>
-      </div>
-
-      <div class="stat-card">
-        <h3>Avg Response Time</h3>
-        <div class="stat-value" id="avgResponseTime">0m</div>
-        <div class="subtitle">Team average</div>
-      </div>
-
-      <div class="stat-card">
-        <h3>Satisfaction Score</h3>
-        <div class="stat-value" id="satisfactionScore">0%</div>
-        <div class="subtitle">Customer rating</div>
-      </div>
+    <div class="date-box">
+      <input type="date" id="startDate" />
+      <input type="date" id="endDate" />
+      <button id="loadBtn">Load Report</button>
     </div>
 
-    <div class="dashboard-controls">
-      <div class="search-box">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <input type="text" id="searchInput" placeholder="Search agents...">
-      </div>
-      <div class="filter-controls">
-        <button class="filter-btn active" data-filter="all">All Agents</button>
-        <button class="filter-btn" data-filter="enterprise">Enterprise</button>
-        <button class="filter-btn" data-filter="high">High Performers</button>
-        <button class="filter-btn" data-filter="needs">Needs Attention</button>
-      </div>
-    </div>
+    <div id="loading" class="hidden">Loading...</div>
 
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th class="sortable" data-sort="agent">Agent</th>
-            <th class="sortable" data-sort="open">Open Tickets</th>
-            <th class="sortable" data-sort="closed">Closed Today</th>
-            <th class="sortable" data-sort="response">Avg Response</th>
-            <th class="sortable" data-sort="satisfaction">Satisfaction</th>
-            <th class="sortable" data-sort="plan">Plan Focus</th>
-            <th>Performance</th>
-          </tr>
-        </thead>
-        <tbody id="performanceRows">
-          <!-- Performance rows will be populated here -->
-        </tbody>
-      </table>
-    </div>
+    <table id="performanceTable">
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>Total Tickets</th>
+          <th>Comments</th>
+          <th>Closed</th>
+          <th>Median Reply</th>
+          <th>First Reply</th>
+          <th>Assign Reply</th>
+          <th>Last Close</th>
+          <th>Rating</th>
+          <th>Activity</th>
+          <th>Hours Active</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
-    <div class="charts-container">
-      <div class="chart-card">
-        <h3>Ticket Distribution by Agent</h3>
-        <div id="ticketsChart" class="chart-placeholder">
-          <div class="chart-bars">
-            <!-- Chart bars will be populated here -->
-          </div>
-        </div>
-      </div>
-      
-      <div class="chart-card">
-        <h3>Satisfaction Scores</h3>
-        <div id="satisfactionChart" class="chart-placeholder">
-          <div class="satisfaction-bars">
-            <!-- Satisfaction bars will be populated here -->
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <footer>
-      Gleap Team Dashboard • Updated just now • Powered by Turso Cloud
-    </footer>
   </div>
 
   <script src="dashboard.js"></script>
