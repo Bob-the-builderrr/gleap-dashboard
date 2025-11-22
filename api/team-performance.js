@@ -4,6 +4,8 @@ const IST_OFFSET_MINUTES = 330; // +05:30
 const TEAM_ID = "66595e93b58fb2a1e6b8a83f";
 const PROJECT_ID = process.env.GLEAP_PROJECT_ID || "64d9fa1b014ae7130f2e58d1";
 const ISO_WITH_TZ = /([zZ]|[+-]\d{2}:?\d{2})$/;
+const DEFAULT_GLEAP_TOKEN =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE";
 
 function hasTimezone(value) {
   return ISO_WITH_TZ.test(value);
@@ -203,7 +205,11 @@ export default async function handler(req, res) {
     const token =
       process.env.GLEAP_TOKEN ||
       process.env.GLEAP_API_TOKEN ||
-      process.env.GLEAP_DASH_TOKEN;
+      process.env.GLEAP_DASH_TOKEN ||
+      DEFAULT_GLEAP_TOKEN;
+    const cleanedToken = token.startsWith("Bearer ")
+      ? token.replace(/^Bearer\\s+/i, "")
+      : token;
     if (!token) {
       return buildError(
         res,
@@ -225,7 +231,7 @@ export default async function handler(req, res) {
 
     const gleapRes = await fetch(gleapUrl.toString(), {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${cleanedToken}`,
         project: PROJECT_ID,
       },
       signal: controller.signal,
