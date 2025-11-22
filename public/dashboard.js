@@ -3,9 +3,11 @@
 ============================ */
 function showTab(name) {
   document.getElementById("allTab").style.display =
-    name === "all" ? "block" : "none";
+    name === "all" ? "none" : "none";
   document.getElementById("archivedTab").style.display =
     name === "archived" ? "block" : "none";
+  document.getElementById("plansTab").style.display =
+    name === "plans" ? "block" : "none";
 
   document.querySelectorAll(".tab").forEach(btn =>
     btn.classList.remove("active")
@@ -18,109 +20,107 @@ function showTab(name) {
   // Refresh data when switching tabs
   if (name === 'all') {
     loadAllTickets();
-  } else {
+  } else if (name === 'archived') {
     loadArchived();
+  } else if (name === 'plans') {
+    loadPlanSummary();
   }
 }
 
 /* ============================
-   LOAD ALL LIVE TICKETS
+   LOAD PLAN SUMMARY
 ============================ */
-async function loadAllTickets() {
+async function loadPlanSummary() {
   try {
-    console.log("Loading open tickets...");
-    const res = await fetch("/api/open-tickets");
+    console.log("Loading plan summary...");
+    const res = await fetch("/api/plan-summary");
     const data = await res.json();
 
-    console.log("Open tickets response:", data);
+    console.log("Plan summary response:", data);
 
-    // Use all data, don't filter
-    const valid = data;
-
-    /* ---- Update TOTAL tickets ---- */
-    let total = valid.length;
-    document.getElementById("totalTickets").innerText = total;
-
-    /* ---- Plan breakdown ---- */
-    const plan = {};
-    valid.forEach(r => {
-      const key = r.plan_type || "UNKNOWN_PLAN";
-      plan[key] = (plan[key] || 0) + 1;
-    });
-
-    const planDiv = document.getElementById("planBreakdown");
-    planDiv.innerHTML = "";
-    Object.entries(plan).forEach(([k, v]) => {
-      planDiv.innerHTML += `<p><strong>${k}:</strong> ${v}</p>`;
-    });
-
-    /* ---- Fill Table ---- */
-    const tbody = document.getElementById("ticketRows");
-    tbody.innerHTML = "";
-
-    if (valid.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center;">No open tickets found</td></tr>`;
-      return;
-    }
-
-    valid.forEach(r => {
-      tbody.innerHTML += `
-        <tr>
-          <td>${r.agent_name || "UNASSIGNED"}</td>
-          <td>${r.agent_open_ticket || "0"}</td>
-          <td>${r.priority || "-"}</td>
-          <td>${r.ticket_status || "-"}</td>
-          <td>${r.time_open_duration || "-"}</td>
-          <td>${r.user_email || "-"}</td>
-          <td>${r.plan_type || "-"}</td>
-          <td>${r.tags || "-"}</td>
-        </tr>
-      `;
-    });
-  } catch (err) {
-    console.error("Error loading tickets:", err);
-    document.getElementById("ticketRows").innerHTML = 
-      `<tr><td colspan="8" style="text-align: center; color: red;">Error loading tickets: ${err.message}</td></tr>`;
-  }
-}
-
-/* ============================
-   LOAD ARCHIVED TICKETS
-============================ */
-async function loadArchived() {
-  try {
-    const timeWindow = document.getElementById("timeWindow").value;
-    console.log(`Loading archived tickets for window: ${timeWindow}`);
+    const summaryDiv = document.getElementById("planSummary");
     
-    const res = await fetch(`/api/archived-tickets?window=${timeWindow}`);
-    const data = await res.json();
-
-    console.log("Archived tickets response:", data);
-
-    const tbody = document.getElementById("archivedRows");
-    tbody.innerHTML = "";
-
-    if (data.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No archived tickets found for the last ${timeWindow}</td></tr>`;
+    if (data.error) {
+      summaryDiv.innerHTML = `<p style="color: red;">Error loading plan summary</p>`;
       return;
     }
 
-    data.forEach(t => {
-      tbody.innerHTML += `
-        <tr>
-          <td>${t.agent_name}</td>
-          <td>${t.agent_email}</td>
-          <td>${t.ticket_id}</td>
-          <td><strong>${t.total_count}</strong></td>
-          <td>${t.archived_date_ist}</td>
-          <td>${t.archived_time_ist}</td>
-        </tr>
-      `;
-    });
+    const timeIST = data.time_ist || new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+    summaryDiv.innerHTML = `
+      <div class="plan-summary-header">
+        <h3>📊 Plan Distribution (${timeIST} IST)</h3>
+        <div class="total-tickets">Total Tickets: <strong>${data.total_tickets}</strong></div>
+      </div>
+
+      <div class="plan-cards">
+        <div class="plan-card base-plan">
+          <div class="plan-emoji">🟢</div>
+          <div class="plan-info">
+            <div class="plan-name">BASE PLAN</div>
+            <div class="plan-count">${data.summary.base_plan}</div>
+          </div>
+        </div>
+
+        <div class="plan-card pro-plan">
+          <div class="plan-emoji">🚀</div>
+          <div class="plan-info">
+            <div class="plan-name">PRO PLAN</div>
+            <div class="plan-count">${data.summary.pro_plan}</div>
+          </div>
+        </div>
+
+        <div class="plan-card trial-plan">
+          <div class="plan-emoji">📦</div>
+          <div class="plan-info">
+            <div class="plan-name">TRIAL PLAN</div>
+            <div class="plan-count">${data.summary.trial_plan}</div>
+          </div>
+        </div>
+
+        <div class="plan-card custom-plan">
+          <div class="plan-emoji">💎</div>
+          <div class="plan-info">
+            <div class="plan-name">CUSTOM PLAN</div>
+            <div class="plan-count">${data.summary.custom_plan}</div>
+          </div>
+        </div>
+      </div>
+
+      ${data.custom_details && data.custom_details.length > 0 ? `
+        <div class="custom-details">
+          <h4>Custom Plan Breakdown:</h4>
+          <div class="custom-list">
+            ${data.custom_details.map(detail => `<div class="custom-item">${detail}</div>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="full-breakdown">
+        <h4>Full Plan Breakdown:</h4>
+        <table class="breakdown-table">
+          <thead>
+            <tr>
+              <th>Plan Type</th>
+              <th>Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.breakdown.map(item => `
+              <tr>
+                <td>${item.emoji} ${item.plan}</td>
+                <td><strong>${item.count}</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
   } catch (err) {
-    console.error("Error loading archived tickets:", err);
-    document.getElementById("archivedRows").innerHTML = 
-      `<tr><td colspan="6" style="text-align: center; color: red;">Error loading archived tickets: ${err.message}</td></tr>`;
+    console.error("Error loading plan summary:", err);
+    document.getElementById("planSummary").innerHTML = 
+      `<p style="color: red;">Error loading plan summary: ${err.message}</p>`;
   }
 }
 
@@ -129,12 +129,17 @@ async function loadArchived() {
 ============================ */
 loadAllTickets();
 loadArchived();
+loadStatistics();
 
 // Auto-refresh every 30 seconds
 setInterval(() => {
-  if (document.getElementById("allTab").style.display !== "none") {
+  const activeTab = document.querySelector('.tab.active').getAttribute('onclick');
+  if (activeTab.includes("'all'")) {
     loadAllTickets();
-  } else {
+  } else if (activeTab.includes("'archived'")) {
     loadArchived();
+  } else if (activeTab.includes("'plans'")) {
+    loadPlanSummary();
   }
+  loadStatistics(); // Always refresh statistics
 }, 30000);
