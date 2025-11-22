@@ -358,7 +358,7 @@ export default async function handler(req, res) {
       await Promise.all(
         Object.entries(ranges).map(async ([key, list]) => {
           const chunkResults = [];
-          const BATCH_SIZE = 10;
+          const BATCH_SIZE = 50; // Increased from 10 to 50 for speed
           for (let i = 0; i < list.length; i += BATCH_SIZE) {
             const batch = list.slice(i, i + BATCH_SIZE);
             const batchRes = await Promise.all(batch.map(r => fetchGleapStats(r.start, r.end)));
@@ -402,8 +402,9 @@ export default async function handler(req, res) {
       await Promise.all(
         Object.entries(ranges).map(async ([key, list]) => {
           const chunkResults = [];
-          for (let i = 0; i < list.length; i += 10) {
-            const batch = list.slice(i, i + 10);
+          const BATCH_SIZE = 50; // Increased from 10 to 50
+          for (let i = 0; i < list.length; i += BATCH_SIZE) {
+            const batch = list.slice(i, i + BATCH_SIZE);
             const batchRes = await Promise.all(batch.map(r => fetchGleapStats(r.start, r.end)));
             chunkResults.push(...batchRes);
           }
