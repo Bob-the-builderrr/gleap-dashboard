@@ -4,6 +4,7 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let agentsData = [];
 let shiftsData = null; // Stores the result of the shift fetch
+let hourlyData = null;
 let sortKey = "ticket_activity";
 let sortDir = "desc";
 let lastRange = null;
@@ -65,6 +66,9 @@ const dom = {
   morningTotal: document.getElementById("morningTotal"),
   noonTotal: document.getElementById("noonTotal"),
   nightTotal: document.getElementById("nightTotal"),
+  // Hourly Matrix
+  hourlyMatrixBody: document.getElementById("hourlyMatrixBody"),
+  hourlyMatrixHeader: document.getElementById("hourlyMatrixHeader"),
 };
 
 function toInputValue(date) {
@@ -287,35 +291,6 @@ function updateLastUpdated() {
   dom.lastUpdated.textContent = `• Updated ${now.toLocaleTimeString()}`;
 }
 
-// --- Shift Logic ---
-
-function getShiftRanges(baseDateIso) {
-  // Calculate shift times based on the selected start date
-  // Morning: 05:00 - 14:00
-  // Noon: 12:00 - 21:00
-  // Night: 20:00 - 05:00 (Next Day)
-
-  const base = new Date(baseDateIso);
-  const y = base.getFullYear();
-  const m = base.getMonth();
-  const d = base.getDate();
-
-  const morningStart = new Date(y, m, d, 5, 0, 0);
-  const morningEnd = new Date(y, m, d, 14, 0, 0);
-
-  const noonStart = new Date(y, m, d, 12, 0, 0);
-  const noonEnd = new Date(y, m, d, 21, 0, 0);
-
-  const nightStart = new Date(y, m, d, 20, 0, 0);
-  const nightEnd = new Date(y, m, d + 1, 5, 0, 0);
-
-  return {
-    morning: { start: toInputValue(morningStart), end: toInputValue(morningEnd) },
-    noon: { start: toInputValue(noonStart), end: toInputValue(noonEnd) },
-    night: { start: toInputValue(nightStart), end: toInputValue(nightEnd) },
-  };
-}
-
 function renderShiftTable(tbody, agents, roster, totalEl) {
   tbody.innerHTML = "";
 
@@ -372,6 +347,70 @@ function renderShiftTable(tbody, agents, roster, totalEl) {
   });
 }
 
+function renderHourlyMatrix() {
+  if (!hourlyData || !dom.hourlyMatrixBody) return;
+
+  const tbody = dom.hourlyMatrixBody;
+  tbody.innerHTML = "";
+
+  // We need to list all agents who appeared in ANY hour
+  const allAgentsMap = new Map();
+
+  Object.keys(hourlyData).forEach(key => {
+    const res = hourlyData[key];
+    if (res && res.agents) {
+      res.agents.forEach(a => {
+        const id = a.agent_email || a.agent_name;
+        if (!allAgentsMap.has(id)) {
+          allAgentsMap.set(id, { name: a.agent_name, email: a.agent_email, image: a.profile_image });
+        }
+      });
+    }
+  });
+
+  const agents = Array.from(allAgentsMap.values());
+
+  // Sort agents by shift roster (Morning -> Noon -> Night)
+  const getShiftOrder = (email) => {
+    if (email === SHIFTS_ROSTER.morning.leader || SHIFTS_ROSTER.morning.members.includes(email)) return 1;
+    if (email === SHIFTS_ROSTER.noon.leader || SHIFTS_ROSTER.noon.members.includes(email)) return 2;
+    if (email === SHIFTS_ROSTER.night.leader || SHIFTS_ROSTER.night.members.includes(email)) return 3;
+    return 4; // Others
+  };
+
+  agents.sort((a, b) => getShiftOrder(a.email) - getShiftOrder(b.email));
+
+  agents.forEach(agent => {
+    const row = document.createElement("tr");
+
+    // Agent Info
+    let html = `
+      <td class="sticky-col">
+        <div class="agent small">
+          <div class="agent-name">${agent.name}</div>
+        </div>
+      </td>
+    `;
+
+    // 24 Hours Columns
+    let totalForRow = 0;
+    for (let h = 0; h < 24; h++) {
+      const hourKey = `h${h}`;
+      const hourData = hourlyData[hourKey];
+      const agentInHour = hourData?.agents?.find(a => (a.agent_email === agent.email || a.agent_name === agent.name));
+      const count = agentInHour ? agentInHour.ticket_activity : 0;
+      totalForRow += count;
+
+      const intensityClass = count > 5 ? 'high' : (count > 0 ? 'low' : '');
+      html += `<td class="hour-cell ${intensityClass}">${count || ''}</td>`;
+    }
+
+    html += `<td class="number strong">${totalForRow}</td>`;
+    row.innerHTML = html;
+    tbody.appendChild(row);
+  });
+}
+
 function renderShifts() {
   if (!shiftsData) return;
 
@@ -393,21 +432,28 @@ async function fetchData(startIso, endIso) {
       startIso
     )}&endDate=${encodeURIComponent(endIso)}`;
 
-    // 2. Fetch Shift Data (Parallel)
-    // We use the startIso to determine the "Day" for the shifts
-    const ranges = getShiftRanges(startIso);
-    const shiftsUrl = `/api/team-performance?ranges=${encodeURIComponent(JSON.stringify(ranges))}`;
+    // 2. Fetch Shift Data (Server-side calculation)
+    const shiftsUrl = `/api/team-performance?startDate=${encodeURIComponent(startIso)}&endDate=${encodeURIComponent(endIso)}&mode=shifts`;
 
-    const [overviewRes, shiftsRes] = await Promise.all([
+    // 3. Fetch Hourly Data (Server-side calculation)
+    const daysDiff = (new Date(endIso) - new Date(startIso)) / (1000 * 60 * 60 * 24);
+    let hourlyPromise = Promise.resolve(null);
+
+    if (daysDiff <= 7) {
+      const hourlyUrl = `/api/team-performance?startDate=${encodeURIComponent(startIso)}&endDate=${encodeURIComponent(endIso)}&mode=hourly`;
+      hourlyPromise = fetch(hourlyUrl).then(r => r.json());
+    }
+
+    const [overviewRes, shiftsRes, hourlyPayload] = await Promise.all([
       fetch(overviewUrl),
-      fetch(shiftsUrl)
+      fetch(shiftsUrl),
+      hourlyPromise
     ]);
 
     const overviewData = await overviewRes.json();
     const shiftsPayload = await shiftsRes.json();
 
     if (!overviewRes.ok) throw new Error(overviewData?.error || "Failed to fetch overview");
-    if (!shiftsRes.ok) throw new Error(shiftsPayload?.error || "Failed to fetch shifts");
 
     // Process Overview
     agentsData = Array.isArray(overviewData?.agents)
@@ -419,8 +465,19 @@ async function fetchData(startIso, endIso) {
     renderTable();
 
     // Process Shifts
-    shiftsData = shiftsPayload.results;
-    renderShifts();
+    if (shiftsPayload && shiftsPayload.results) {
+      shiftsData = shiftsPayload.results;
+      renderShifts();
+    }
+
+    // Process Hourly
+    if (hourlyPayload && hourlyPayload.results) {
+      hourlyData = hourlyPayload.results;
+      renderHourlyMatrix();
+      document.getElementById("hourlySection").classList.remove("hidden");
+    } else {
+      document.getElementById("hourlySection").classList.add("hidden");
+    }
 
     updateLastUpdated();
     lastRange = { startIso, endIso };
