@@ -200,9 +200,16 @@ export default async function handler(req, res) {
       return buildError(res, 400, "startDate must be before endDate");
     }
 
-    const token = process.env.GLEAP_TOKEN;
+    const token =
+      process.env.GLEAP_TOKEN ||
+      process.env.GLEAP_API_TOKEN ||
+      process.env.GLEAP_DASH_TOKEN;
     if (!token) {
-      return buildError(res, 500, "GLEAP_TOKEN environment variable is missing");
+      return buildError(
+        res,
+        500,
+        "GLEAP_TOKEN environment variable is missing on the server"
+      );
     }
 
     const controller = new AbortController();
