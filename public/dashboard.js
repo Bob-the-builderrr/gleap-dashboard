@@ -3,7 +3,7 @@
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let agentsData = [];
-let sortKey = "total_tickets";
+let sortKey = "ticket_activity";
 let sortDir = "desc";
 let lastRange = null;
 let autoRefreshTimer = null;
@@ -175,7 +175,7 @@ function renderTable() {
   if (sorted.length === 0) {
     const row = document.createElement("tr");
     row.innerHTML =
-      '<td class="no-data" colspan="10">No data for this range</td>';
+      '<td class="no-data" colspan="9">No data for this range</td>';
     tbody.appendChild(row);
     updateSortIndicators();
     return;
@@ -199,7 +199,6 @@ function renderTable() {
           </div>
         </div>
       </td>
-      <td class="number">${agent.total_tickets ?? 0}</td>
       <td class="number">${agent.closed_tickets ?? 0}</td>
       <td><span class="chip time">${agent.median_reply_time}</span></td>
       <td><span class="chip time">${agent.median_first_reply}</span></td>
@@ -317,21 +316,19 @@ function exportToCsv() {
   const headers = [
     "Agent",
     "Email",
-    "Total Tickets",
     "Closed",
     "Median Reply",
     "First Reply",
     "Assign Reply",
     "Time To Last Close",
     "Rating",
-    "Ticket Activity",
+    "Ticket Worked",
     "Hours Active",
   ];
 
   const rows = agentsData.map((a) => [
     a.agent_name,
     a.agent_email,
-    a.total_tickets,
     a.closed_tickets,
     a.median_reply_time,
     a.median_first_reply,
