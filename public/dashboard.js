@@ -3,11 +3,42 @@
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let agentsData = [];
+let shiftsData = null; // Stores the result of the shift fetch
 let sortKey = "ticket_activity";
 let sortDir = "desc";
 let lastRange = null;
 let autoRefreshTimer = null;
 let isLoading = false;
+let currentView = "overview"; // 'overview' or 'shifts'
+
+const SHIFTS_ROSTER = {
+  morning: {
+    label: "Morning",
+    leader: "pratik@smartlead.ai",
+    members: ["chandra@smartlead.ai"],
+  },
+  noon: {
+    label: "Noon",
+    leader: "vanshree@smartlead.ai",
+    members: [
+      "danielle@smartlead.ai",
+      "hemylyn@smartlead.ai",
+      "jan@smartlead.ai",
+      "elizhabeth@smartlead.ai",
+      "gayathri@smartlead.ai",
+    ],
+  },
+  night: {
+    label: "Night",
+    leader: "evan", // Will match by name if email fails
+    members: [
+      "edward@smartlead.ai",
+      "graham@smartlead.ai",
+      "sivaraman@smartlead.ai",
+      "abigail@smartlead.ai",
+    ],
+  },
+};
 
 const dom = {
   startInput: document.getElementById("startInput"),
@@ -23,6 +54,17 @@ const dom = {
   visibleAgentsCount: document.getElementById("visibleAgentsCount"),
   loadingOverlay: document.getElementById("loadingOverlay"),
   autoRefresh: document.getElementById("autoRefresh"),
+  // Views
+  overviewView: document.getElementById("overviewView"),
+  shiftsView: document.getElementById("shiftsView"),
+  tabBtns: document.querySelectorAll(".tab-btn"),
+  // Shifts
+  morningBody: document.getElementById("morningBody"),
+  noonBody: document.getElementById("noonBody"),
+  nightBody: document.getElementById("nightBody"),
+  morningTotal: document.getElementById("morningTotal"),
+  noonTotal: document.getElementById("noonTotal"),
+  nightTotal: document.getElementById("nightTotal"),
 };
 
 function toInputValue(date) {
@@ -173,11 +215,10 @@ function renderTable() {
       <td>
         <div class="agent">
           <div class="avatar ${agent.profile_image ? "" : "placeholder"}">
-            ${
-              agent.profile_image
-                ? `<img src="${agent.profile_image}" alt="${agent.agent_name}" loading="lazy" />`
-                : (agent.agent_name || "?").charAt(0)
-            }
+            ${agent.profile_image
+        ? `<img src="${agent.profile_image}" alt="${agent.agent_name}" loading="lazy" />`
+        : (agent.agent_name || "?").charAt(0)
+      }
           </div>
           <div>
             <div class="agent-name">${agent.agent_name}</div>
@@ -246,30 +287,141 @@ function updateLastUpdated() {
   dom.lastUpdated.textContent = `• Updated ${now.toLocaleTimeString()}`;
 }
 
+// --- Shift Logic ---
+
+function getShiftRanges(baseDateIso) {
+  // Calculate shift times based on the selected start date
+  // Morning: 05:00 - 14:00
+  // Noon: 12:00 - 21:00
+  // Night: 20:00 - 05:00 (Next Day)
+
+  const base = new Date(baseDateIso);
+  const y = base.getFullYear();
+  const m = base.getMonth();
+  const d = base.getDate();
+
+  const morningStart = new Date(y, m, d, 5, 0, 0);
+  const morningEnd = new Date(y, m, d, 14, 0, 0);
+
+  const noonStart = new Date(y, m, d, 12, 0, 0);
+  const noonEnd = new Date(y, m, d, 21, 0, 0);
+
+  const nightStart = new Date(y, m, d, 20, 0, 0);
+  const nightEnd = new Date(y, m, d + 1, 5, 0, 0);
+
+  return {
+    morning: { start: toInputValue(morningStart), end: toInputValue(morningEnd) },
+    noon: { start: toInputValue(noonStart), end: toInputValue(noonEnd) },
+    night: { start: toInputValue(nightStart), end: toInputValue(nightEnd) },
+  };
+}
+
+function renderShiftTable(tbody, agents, roster, totalEl) {
+  tbody.innerHTML = "";
+
+  // Filter agents belonging to this roster
+  const shiftAgents = agents.filter(a => {
+    const email = (a.agent_email || "").toLowerCase();
+    const name = (a.agent_name || "").toLowerCase();
+
+    const isLeader = email === roster.leader || name.includes(roster.leader);
+    const isMember = roster.members.some(m => email === m || name.includes(m));
+    return isLeader || isMember;
+  });
+
+  // Calculate Total for this shift (sum of displayed agents)
+  const totalTickets = shiftAgents.reduce((sum, a) => sum + (a.ticket_activity || 0), 0);
+  totalEl.textContent = totalTickets;
+
+  if (!shiftAgents.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="no-data">No agents active</td></tr>';
+    return;
+  }
+
+  shiftAgents.sort((a, b) => (b.ticket_activity || 0) - (a.ticket_activity || 0));
+
+  shiftAgents.forEach(agent => {
+    const email = (agent.agent_email || "").toLowerCase();
+    const name = (agent.agent_name || "").toLowerCase();
+    const isLeader = email === roster.leader || name.includes(roster.leader);
+    const lastSeen = formatLastSeen(agent.last_seen_iso);
+
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>
+        <div class="agent">
+          <div class="avatar ${agent.profile_image ? "" : "placeholder"}">
+            ${agent.profile_image
+        ? `<img src="${agent.profile_image}" alt="${agent.agent_name}" loading="lazy" />`
+        : (agent.agent_name || "?").charAt(0)
+      }
+          </div>
+          <div>
+            <div class="agent-name">
+              ${agent.agent_name}
+              ${isLeader ? '<span class="leader-badge">Leader</span>' : ''}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td class="number">${agent.ticket_activity ?? 0}</td>
+      <td><span class="chip rating ${ratingClass(agent.rating_score)}">${agent.average_rating || "--"}</span></td>
+      <td>${lastSeen.time}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function renderShifts() {
+  if (!shiftsData) return;
+
+  const { morning, noon, night } = shiftsData;
+
+  renderShiftTable(dom.morningBody, morning?.agents || [], SHIFTS_ROSTER.morning, dom.morningTotal);
+  renderShiftTable(dom.noonBody, noon?.agents || [], SHIFTS_ROSTER.noon, dom.noonTotal);
+  renderShiftTable(dom.nightBody, night?.agents || [], SHIFTS_ROSTER.night, dom.nightTotal);
+}
+
 async function fetchData(startIso, endIso) {
   if (!startIso || !endIso) return;
   clearError();
   setLoading(true, `Fetching ${formatDateRange(startIso, endIso)}`);
 
   try {
-    const url = `/api/team-performance?startDate=${encodeURIComponent(
+    // 1. Fetch Overview Data
+    const overviewUrl = `/api/team-performance?startDate=${encodeURIComponent(
       startIso
     )}&endDate=${encodeURIComponent(endIso)}`;
-    const res = await fetch(url);
-    const data = await res.json();
 
-    if (!res.ok) {
-      throw new Error(data?.error || "Failed to fetch data");
-    }
+    // 2. Fetch Shift Data (Parallel)
+    // We use the startIso to determine the "Day" for the shifts
+    const ranges = getShiftRanges(startIso);
+    const shiftsUrl = `/api/team-performance?ranges=${encodeURIComponent(JSON.stringify(ranges))}`;
 
-    agentsData = Array.isArray(data?.agents)
-      ? data.agents.filter(
-          (a) => a.agent_name && (a.agent_email || a.agent_name !== "Unknown")
-        )
+    const [overviewRes, shiftsRes] = await Promise.all([
+      fetch(overviewUrl),
+      fetch(shiftsUrl)
+    ]);
+
+    const overviewData = await overviewRes.json();
+    const shiftsPayload = await shiftsRes.json();
+
+    if (!overviewRes.ok) throw new Error(overviewData?.error || "Failed to fetch overview");
+    if (!shiftsRes.ok) throw new Error(shiftsPayload?.error || "Failed to fetch shifts");
+
+    // Process Overview
+    agentsData = Array.isArray(overviewData?.agents)
+      ? overviewData.agents.filter(
+        (a) => a.agent_name && (a.agent_email || a.agent_name !== "Unknown")
+      )
       : [];
-
-    updateSummaryCards(data?.totals || {}, data?.total_agents);
+    updateSummaryCards(overviewData?.totals || {}, overviewData?.total_agents);
     renderTable();
+
+    // Process Shifts
+    shiftsData = shiftsPayload.results;
+    renderShifts();
+
     updateLastUpdated();
     lastRange = { startIso, endIso };
     if (dom.autoRefresh.checked) {
@@ -277,6 +429,7 @@ async function fetchData(startIso, endIso) {
     }
   } catch (err) {
     showError(err.message || "Unable to load data");
+    console.error(err);
     agentsData = [];
     renderTable();
   } finally {
@@ -364,6 +517,21 @@ function setAutoRefresh(enabled) {
   }
 }
 
+function switchView(view) {
+  currentView = view;
+  dom.tabBtns.forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === view);
+  });
+
+  if (view === "overview") {
+    dom.overviewView.classList.remove("hidden");
+    dom.shiftsView.classList.add("hidden");
+  } else {
+    dom.overviewView.classList.add("hidden");
+    dom.shiftsView.classList.remove("hidden");
+  }
+}
+
 function bindEvents() {
   dom.fetchBtn.addEventListener("click", () => {
     const range = getRangeFromInputs();
@@ -398,6 +566,12 @@ function bindEvents() {
   document.getElementById("exportBtn").addEventListener("click", exportToCsv);
   dom.autoRefresh.addEventListener("change", (e) => {
     setAutoRefresh(e.target.checked);
+  });
+
+  dom.tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      switchView(btn.dataset.view);
+    });
   });
 }
 

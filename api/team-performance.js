@@ -170,10 +170,10 @@ function computeTotals(agents) {
     .filter((v) => Number.isFinite(v));
   const avg_rating = ratingValues.length
     ? Number(
-        (
-          ratingValues.reduce((sum, v) => sum + v, 0) / ratingValues.length
-        ).toFixed(1)
-      )
+      (
+        ratingValues.reduce((sum, v) => sum + v, 0) / ratingValues.length
+      ).toFixed(1)
+    )
     : null;
 
   return {
@@ -194,14 +194,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { startDate, endDate } = req.query;
-
-    const startIso = normalizeToUtcIso(startDate, false);
-    const endIso = normalizeToUtcIso(endDate, true);
-
-    if (new Date(startIso) >= new Date(endIso)) {
-      return buildError(res, 400, "startDate must be before endDate");
-    }
+    const { startDate, endDate, ranges } = req.query;
 
     const token =
       process.env.GLEAP_TOKEN ||
@@ -211,6 +204,7 @@ export default async function handler(req, res) {
     const cleanedToken = token.startsWith("Bearer ")
       ? token.replace(/^Bearer\\s+/i, "")
       : token;
+
     if (!token) {
       return buildError(
         res,
@@ -219,61 +213,103 @@ export default async function handler(req, res) {
       );
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const fetchGleapStats = async (startIso, endIso) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-    const gleapUrl = new URL("https://dashapi.gleap.io/v3/statistics/lists");
-    gleapUrl.searchParams.set("chartType", "TEAM_PERFORMANCE_LIST");
-    gleapUrl.searchParams.set("startDate", startIso);
-    gleapUrl.searchParams.set("endDate", endIso);
-    gleapUrl.searchParams.set("useWorkingHours", "false");
-    gleapUrl.searchParams.set("team", TEAM_ID);
-    gleapUrl.searchParams.set("aggsType", "MEDIAN");
+      try {
+        const gleapUrl = new URL("https://dashapi.gleap.io/v3/statistics/lists");
+        gleapUrl.searchParams.set("chartType", "TEAM_PERFORMANCE_LIST");
+        gleapUrl.searchParams.set("startDate", startIso);
+        gleapUrl.searchParams.set("endDate", endIso);
+        gleapUrl.searchParams.set("useWorkingHours", "false");
+        gleapUrl.searchParams.set("team", TEAM_ID);
+        gleapUrl.searchParams.set("aggsType", "MEDIAN");
 
-    const gleapRes = await fetch(gleapUrl.toString(), {
-      headers: {
-        Authorization: `Bearer ${cleanedToken}`,
-        project: PROJECT_ID,
-      },
-      signal: controller.signal,
-    });
+        const gleapRes = await fetch(gleapUrl.toString(), {
+          headers: {
+            Authorization: `Bearer ${cleanedToken}`,
+            project: PROJECT_ID,
+          },
+          signal: controller.signal,
+        });
 
-    clearTimeout(timeoutId);
+        if (!gleapRes.ok) {
+          const body = await gleapRes.text();
+          console.error("Gleap API error", gleapRes.status, body);
+          throw new Error(`Gleap API error (${gleapRes.status})`);
+        }
 
-    if (!gleapRes.ok) {
-      const body = await gleapRes.text();
-      console.error("Gleap API error", gleapRes.status, body);
-      return buildError(res, 502, `Gleap API error (${gleapRes.status})`);
-    }
+        const payload = await gleapRes.json();
+        const rawList = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.list)
+            ? payload.list
+            : [];
 
-    const payload = await gleapRes.json();
-    const rawList = Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload?.list)
-      ? payload.list
-      : [];
+        const agents = rawList
+          .map(transformAgent)
+          .filter(Boolean)
+          .sort(
+            (a, b) =>
+              (Number(b.total_tickets) || 0) - (Number(a.total_tickets) || 0)
+          );
 
-    const agents = rawList
-      .map(transformAgent)
-      .filter(Boolean)
-      .sort(
-        (a, b) =>
-          (Number(b.total_tickets) || 0) - (Number(a.total_tickets) || 0)
+        const totals = computeTotals(agents);
+        return { agents, totals };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Handle Multiple Ranges (Shifts)
+    if (ranges) {
+      let parsedRanges;
+      try {
+        parsedRanges = JSON.parse(ranges);
+      } catch (e) {
+        return buildError(res, 400, "Invalid ranges JSON");
+      }
+
+      const results = {};
+      await Promise.all(
+        Object.entries(parsedRanges).map(async ([key, range]) => {
+          try {
+            const s = normalizeToUtcIso(range.start, false);
+            const e = normalizeToUtcIso(range.end, true);
+            results[key] = await fetchGleapStats(s, e);
+          } catch (err) {
+            console.error(`Error fetching range ${key}:`, err);
+            results[key] = { error: err.message, agents: [], totals: {} };
+          }
+        })
       );
 
-    const totals = computeTotals(agents);
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(200).json({ results });
+    }
+
+    // Handle Single Range (Default)
+    const startIso = normalizeToUtcIso(startDate, false);
+    const endIso = normalizeToUtcIso(endDate, true);
+
+    if (new Date(startIso) >= new Date(endIso)) {
+      return buildError(res, 400, "startDate must be before endDate");
+    }
+
+    const data = await fetchGleapStats(startIso, endIso);
 
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Access-Control-Allow-Origin", "*");
 
     return res.status(200).json({
       date_range: { start: startIso, end: endIso },
-      total_agents: totals.total_agents,
+      total_agents: data.totals.total_agents,
       totals: {
-        total_tickets: totals.total_tickets,
-        avg_rating: totals.avg_rating,
+        total_tickets: data.totals.total_tickets,
+        avg_rating: data.totals.avg_rating,
       },
-      agents,
+      agents: data.agents,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

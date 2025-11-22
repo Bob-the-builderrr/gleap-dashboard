@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Team Performance Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <div class="backdrop">
     <div class="orb orb-1"></div>
@@ -62,57 +65,152 @@
 
     <div id="errorBanner" class="alert hidden"></div>
 
-    <section class="summary-grid">
-      <article class="card">
-        <p class="card-label">Total Tickets</p>
-        <p class="card-value" id="totalTicketsValue">--</p>
-        <p class="card-sub muted-text">Across the selected range</p>
-      </article>
-      <article class="card">
-        <p class="card-label">Average Rating</p>
-        <p class="card-value" id="averageRatingValue">--</p>
-        <p class="card-sub muted-text">Emoji stripped numeric score</p>
-      </article>
-      <article class="card">
-        <p class="card-label">Active Agents</p>
-        <p class="card-value" id="totalAgentsValue">--</p>
-        <p class="card-sub muted-text">Unknown agents are filtered out</p>
-      </article>
-    </section>
+    <div class="view-toggles">
+      <button class="tab-btn active" data-view="overview">Overview</button>
+      <button class="tab-btn" data-view="shifts">Shift Performance</button>
+    </div>
 
-    <section class="panel table-card">
-      <div class="table-head">
-        <div>
-          <h2>Agent Performance</h2>
-          <p class="caption muted-text">
-            Sorted by total tickets. Showing <span id="visibleAgentsCount">0</span> agents.
-          </p>
+    <div id="overviewView">
+      <section class="summary-grid">
+        <article class="card">
+          <p class="card-label">Total Tickets</p>
+          <p class="card-value" id="totalTicketsValue">--</p>
+          <p class="card-sub muted-text">Across the selected range</p>
+        </article>
+        <article class="card">
+          <p class="card-label">Average Rating</p>
+          <p class="card-value" id="averageRatingValue">--</p>
+          <p class="card-sub muted-text">Emoji stripped numeric score</p>
+        </article>
+        <article class="card">
+          <p class="card-label">Active Agents</p>
+          <p class="card-value" id="totalAgentsValue">--</p>
+          <p class="card-sub muted-text">Unknown agents are filtered out</p>
+        </article>
+      </section>
+
+      <section class="panel table-card">
+        <div class="table-head">
+          <div>
+            <h2>Agent Performance</h2>
+            <p class="caption muted-text">
+              Sorted by total tickets. Showing <span id="visibleAgentsCount">0</span> agents.
+            </p>
+          </div>
+          <div class="table-tools">
+            <input id="agentSearch" type="search" placeholder="Search name or email" />
+          </div>
         </div>
-        <div class="table-tools">
-          <input id="agentSearch" type="search" placeholder="Search name or email" />
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th data-sort="ticket_activity" class="sortable active">Ticket Worked <span
+                    class="sort-indicator">↓</span></th>
+                <th data-sort="closed_tickets" class="sortable">Closed</th>
+                <th data-sort="median_reply_seconds" class="sortable">Median Reply</th>
+                <th data-sort="median_first_reply_seconds" class="sortable">First Reply</th>
+                <th data-sort="rating_score" class="sortable">Rating</th>
+                <th data-sort="last_seen_iso" class="sortable">Last Seen Date</th>
+                <th data-sort="last_seen_iso" class="sortable">Last Seen Time</th>
+                <th data-sort="hours_active" class="sortable">Hours Active</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="9" class="no-data">Fetching data...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+      </section>
+    </div>
+
+    <div id="shiftsView" class="hidden">
+      <div class="shifts-container">
+        <!-- Morning Shift -->
+        <section class="panel shift-panel" id="shiftMorning">
+          <div class="shift-header">
+            <div class="shift-title">
+              <h3>Morning Shift</h3>
+              <span class="shift-time">05:00 AM - 02:00 PM</span>
+            </div>
+            <div class="shift-stat">
+              <span class="label">Shift Total</span>
+              <span class="value" id="morningTotal">--</span>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table class="shift-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="morningBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Noon Shift -->
+        <section class="panel shift-panel" id="shiftNoon">
+          <div class="shift-header">
+            <div class="shift-title">
+              <h3>Noon Shift</h3>
+              <span class="shift-time">12:00 PM - 09:00 PM</span>
+            </div>
+            <div class="shift-stat">
+              <span class="label">Shift Total</span>
+              <span class="value" id="noonTotal">--</span>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table class="shift-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="noonBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Night Shift -->
+        <section class="panel shift-panel" id="shiftNight">
+          <div class="shift-header">
+            <div class="shift-title">
+              <h3>Night Shift</h3>
+              <span class="shift-time">08:00 PM - 05:00 AM</span>
+            </div>
+            <div class="shift-stat">
+              <span class="label">Shift Total</span>
+              <span class="value" id="nightTotal">--</span>
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table class="shift-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="nightBody"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Agent</th>
-              <th data-sort="ticket_activity" class="sortable active">Ticket Worked <span class="sort-indicator">?</span></th>
-              <th data-sort="closed_tickets" class="sortable">Closed</th>
-              <th data-sort="median_reply_seconds" class="sortable">Median Reply</th>
-              <th data-sort="median_first_reply_seconds" class="sortable">First Reply</th>
-              <th data-sort="rating_score" class="sortable">Rating</th>
-              <th data-sort="last_seen_iso" class="sortable">Last Seen Date</th>
-              <th data-sort="last_seen_iso" class="sortable">Last Seen Time</th>
-              <th data-sort="hours_active" class="sortable">Hours Active</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody">
-            <tr><td colspan="9" class="no-data">Fetching data...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    </div>
   </main>
 
   <div id="loadingOverlay" class="loading-overlay hidden">
@@ -124,4 +222,5 @@
 
   <script src="dashboard.js"></script>
 </body>
+
 </html>
