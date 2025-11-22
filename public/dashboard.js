@@ -14,6 +14,13 @@ function showTab(name) {
   document
     .querySelector(`.tab[onclick="showTab('${name}')"]`)
     .classList.add("active");
+
+  // Refresh data when switching tabs
+  if (name === 'all') {
+    loadAllTickets();
+  } else {
+    loadArchived();
+  }
 }
 
 /* ============================
@@ -21,10 +28,14 @@ function showTab(name) {
 ============================ */
 async function loadAllTickets() {
   try {
+    console.log("Loading open tickets...");
     const res = await fetch("/api/open-tickets");
     const data = await res.json();
 
-    const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
+    console.log("Open tickets response:", data);
+
+    // Use all data, don't filter
+    const valid = data;
 
     /* ---- Update TOTAL tickets ---- */
     let total = valid.length;
@@ -47,6 +58,11 @@ async function loadAllTickets() {
     const tbody = document.getElementById("ticketRows");
     tbody.innerHTML = "";
 
+    if (valid.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center;">No open tickets found</td></tr>`;
+      return;
+    }
+
     valid.forEach(r => {
       tbody.innerHTML += `
         <tr>
@@ -64,7 +80,7 @@ async function loadAllTickets() {
   } catch (err) {
     console.error("Error loading tickets:", err);
     document.getElementById("ticketRows").innerHTML = 
-      `<tr><td colspan="8" style="text-align: center; color: red;">Error loading tickets</td></tr>`;
+      `<tr><td colspan="8" style="text-align: center; color: red;">Error loading tickets: ${err.message}</td></tr>`;
   }
 }
 
@@ -74,14 +90,18 @@ async function loadAllTickets() {
 async function loadArchived() {
   try {
     const timeWindow = document.getElementById("timeWindow").value;
+    console.log(`Loading archived tickets for window: ${timeWindow}`);
+    
     const res = await fetch(`/api/archived-tickets?window=${timeWindow}`);
     const data = await res.json();
+
+    console.log("Archived tickets response:", data);
 
     const tbody = document.getElementById("archivedRows");
     tbody.innerHTML = "";
 
     if (data.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No archived tickets found for selected time window</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No archived tickets found for the last ${timeWindow}</td></tr>`;
       return;
     }
 
@@ -91,7 +111,7 @@ async function loadArchived() {
           <td>${t.agent_name}</td>
           <td>${t.agent_email}</td>
           <td>${t.ticket_id}</td>
-          <td>${t.total_count}</td>
+          <td><strong>${t.total_count}</strong></td>
           <td>${t.archived_date_ist}</td>
           <td>${t.archived_time_ist}</td>
         </tr>
@@ -100,7 +120,7 @@ async function loadArchived() {
   } catch (err) {
     console.error("Error loading archived tickets:", err);
     document.getElementById("archivedRows").innerHTML = 
-      `<tr><td colspan="6" style="text-align: center; color: red;">Error loading archived tickets</td></tr>`;
+      `<tr><td colspan="6" style="text-align: center; color: red;">Error loading archived tickets: ${err.message}</td></tr>`;
   }
 }
 
@@ -114,5 +134,7 @@ loadArchived();
 setInterval(() => {
   if (document.getElementById("allTab").style.display !== "none") {
     loadAllTickets();
+  } else {
+    loadArchived();
   }
 }, 30000);
