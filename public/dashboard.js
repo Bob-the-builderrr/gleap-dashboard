@@ -427,52 +427,35 @@ async function fetchData(startIso, endIso) {
   setLoading(true, `Fetching ${formatDateRange(startIso, endIso)}`);
 
   try {
-    // 1. Fetch Overview Data
-    const overviewUrl = `/api/team-performance?startDate=${encodeURIComponent(
+    // Single API call for all data
+    const url = `/api/team-performance?startDate=${encodeURIComponent(
       startIso
     )}&endDate=${encodeURIComponent(endIso)}`;
 
-    // 2. Fetch Shift Data (Server-side calculation)
-    const shiftsUrl = `/api/team-performance?startDate=${encodeURIComponent(startIso)}&endDate=${encodeURIComponent(endIso)}&mode=shifts`;
+    const res = await fetch(url);
+    const data = await res.json();
 
-    // 3. Fetch Hourly Data (Server-side calculation)
-    const daysDiff = (new Date(endIso) - new Date(startIso)) / (1000 * 60 * 60 * 24);
-    let hourlyPromise = Promise.resolve(null);
+    if (!res.ok) throw new Error(data?.error || "Failed to fetch data");
 
-    if (daysDiff <= 7) {
-      const hourlyUrl = `/api/team-performance?startDate=${encodeURIComponent(startIso)}&endDate=${encodeURIComponent(endIso)}&mode=hourly`;
-      hourlyPromise = fetch(hourlyUrl).then(r => r.json());
-    }
-
-    const [overviewRes, shiftsRes, hourlyPayload] = await Promise.all([
-      fetch(overviewUrl),
-      fetch(shiftsUrl),
-      hourlyPromise
-    ]);
-
-    const overviewData = await overviewRes.json();
-    const shiftsPayload = await shiftsRes.json();
-
-    if (!overviewRes.ok) throw new Error(overviewData?.error || "Failed to fetch overview");
-
-    // Process Overview
-    agentsData = Array.isArray(overviewData?.agents)
-      ? overviewData.agents.filter(
+    // 1. Process Overview
+    const overview = data.overview;
+    agentsData = Array.isArray(overview?.agents)
+      ? overview.agents.filter(
         (a) => a.agent_name && (a.agent_email || a.agent_name !== "Unknown")
       )
       : [];
-    updateSummaryCards(overviewData?.totals || {}, overviewData?.total_agents);
+    updateSummaryCards(overview?.totals || {}, overview?.total_agents);
     renderTable();
 
-    // Process Shifts
-    if (shiftsPayload && shiftsPayload.results) {
-      shiftsData = shiftsPayload.results;
+    // 2. Process Shifts
+    if (data.shifts) {
+      shiftsData = data.shifts;
       renderShifts();
     }
 
-    // Process Hourly
-    if (hourlyPayload && hourlyPayload.results) {
-      hourlyData = hourlyPayload.results;
+    // 3. Process Hourly
+    if (data.hourly) {
+      hourlyData = data.hourly;
       renderHourlyMatrix();
       document.getElementById("hourlySection").classList.remove("hidden");
     } else {

@@ -194,7 +194,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { startDate, endDate, mode } = req.query;
+    const { startDate, endDate } = req.query;
 
     const token =
       process.env.GLEAP_TOKEN ||
@@ -299,14 +299,21 @@ export default async function handler(req, res) {
       };
     };
 
-    // --- SHIFT MODE ---
-    if (mode === "shifts") {
-      const startIso = normalizeToUtcIso(startDate, false);
-      const endIso = normalizeToUtcIso(endDate, true);
+    // --- MAIN LOGIC: Calculate All Metrics in One Go ---
 
+    const startIso = normalizeToUtcIso(startDate, false);
+    const endIso = normalizeToUtcIso(endDate, true);
+
+    if (new Date(startIso) >= new Date(endIso)) {
+      return buildError(res, 400, "startDate must be before endDate");
+    }
+
+    // 1. Overview Data (Always fetch)
+    const overviewPromise = fetchGleapStats(startIso, endIso);
+
+    // 2. Shift Data (Always fetch)
+    const shiftPromise = (async () => {
       const ranges = { morning: [], noon: [], night: [] };
-
-      // Helper to add days
       const addDays = (d, n) => new Date(d.getTime() + n * 24 * 60 * 60 * 1000);
 
       let ptr = new Date(startIso);
@@ -360,19 +367,13 @@ export default async function handler(req, res) {
           results[key] = mergeResults(chunkResults);
         })
       );
+      return results;
+    })();
 
-      return res.status(200).json({ results });
-    }
-
-    // --- HOURLY MODE ---
-    if (mode === "hourly") {
-      const startIso = normalizeToUtcIso(startDate, false);
-      const endIso = normalizeToUtcIso(endDate, true);
-
+    // 3. Hourly Data (Only if <= 7 days)
+    const hourlyPromise = (async () => {
       const diffDays = (new Date(endIso) - new Date(startIso)) / (1000 * 3600 * 24);
-      if (diffDays > 7) {
-        return res.status(200).json({ results: {} });
-      }
+      if (diffDays > 7) return null;
 
       const ranges = {};
       for (let h = 0; h < 24; h++) ranges[`h${h}`] = [];
@@ -409,31 +410,31 @@ export default async function handler(req, res) {
           results[key] = mergeResults(chunkResults);
         })
       );
+      return results;
+    })();
 
-      return res.status(200).json({ results });
-    }
-
-    // Handle Single Range (Default Overview)
-    const startIso = normalizeToUtcIso(startDate, false);
-    const endIso = normalizeToUtcIso(endDate, true);
-
-    if (new Date(startIso) >= new Date(endIso)) {
-      return buildError(res, 400, "startDate must be before endDate");
-    }
-
-    const data = await fetchGleapStats(startIso, endIso);
+    // Execute all in parallel
+    const [overviewData, shiftsData, hourlyData] = await Promise.all([
+      overviewPromise,
+      shiftPromise,
+      hourlyPromise
+    ]);
 
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Access-Control-Allow-Origin", "*");
 
     return res.status(200).json({
-      date_range: { start: startIso, end: endIso },
-      total_agents: data.totals.total_agents,
-      totals: {
-        total_tickets: data.totals.total_tickets,
-        avg_rating: data.totals.avg_rating,
+      overview: {
+        date_range: { start: startIso, end: endIso },
+        total_agents: overviewData.totals.total_agents,
+        totals: {
+          total_tickets: overviewData.totals.total_tickets,
+          avg_rating: overviewData.totals.avg_rating,
+        },
+        agents: overviewData.agents,
       },
-      agents: data.agents,
+      shifts: shiftsData,
+      hourly: hourlyData,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
