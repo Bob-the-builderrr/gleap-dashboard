@@ -261,45 +261,7 @@ export default async function handler(req, res) {
       }
     };
 
-    const mergeResults = (resultsList) => {
-      const agentMap = new Map();
-
-      resultsList.forEach(res => {
-        res.agents.forEach(agent => {
-          const key = agent.agent_email || agent.agent_name;
-          if (!agentMap.has(key)) {
-            agentMap.set(key, { ...agent });
-          } else {
-            const existing = agentMap.get(key);
-            existing.total_tickets = (Number(existing.total_tickets) || 0) + (Number(agent.total_tickets) || 0);
-            existing.closed_tickets = (Number(existing.closed_tickets) || 0) + (Number(agent.closed_tickets) || 0);
-            existing.ticket_activity = (Number(existing.ticket_activity) || 0) + (Number(agent.ticket_activity) || 0);
-
-            if (agent.rating_score) {
-              const oldRating = existing.rating_score || 0;
-              const newRating = agent.rating_score;
-              existing.rating_score = (oldRating + newRating) / 2;
-              existing.average_rating = existing.rating_score.toFixed(1);
-            }
-
-            if (new Date(agent.last_seen_iso) > new Date(existing.last_seen_iso)) {
-              existing.last_seen_iso = agent.last_seen_iso;
-            }
-          }
-        });
-      });
-
-      const mergedAgents = Array.from(agentMap.values()).sort(
-        (a, b) => (Number(b.total_tickets) || 0) - (Number(a.total_tickets) || 0)
-      );
-
-      return {
-        agents: mergedAgents,
-        totals: computeTotals(mergedAgents)
-      };
-    };
-
-    // --- MAIN LOGIC: Calculate All Metrics in One Go ---
+    // --- MAIN LOGIC: Single API Call ---
 
     const startIso = normalizeToUtcIso(startDate, false);
     const endIso = normalizeToUtcIso(endDate, true);
@@ -308,121 +270,15 @@ export default async function handler(req, res) {
       return buildError(res, 400, "startDate must be before endDate");
     }
 
-    // 1. Overview Data (Always fetch)
-    const overviewPromise = fetchGleapStats(startIso, endIso);
-
-    // 2. Shift Data (Always fetch)
-    const shiftPromise = (async () => {
-      const ranges = { morning: [], noon: [], night: [] };
-      const addDays = (d, n) => new Date(d.getTime() + n * 24 * 60 * 60 * 1000);
-
-      let ptr = new Date(startIso);
-      const end = new Date(endIso);
-      const MAX_DAYS = 60;
-      let count = 0;
-
-      while (ptr <= end && count < MAX_DAYS) {
-        const istOffset = 330 * 60 * 1000;
-        const istDate = new Date(ptr.getTime() + istOffset);
-        const iy = istDate.getUTCFullYear();
-        const im = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-        const id = String(istDate.getUTCDate()).padStart(2, '0');
-        const iDateStr = `${iy}-${im}-${id}`;
-
-        ranges.morning.push({
-          start: istToUtcIso(iDateStr, "05:00", false),
-          end: istToUtcIso(iDateStr, "14:00", false)
-        });
-
-        ranges.noon.push({
-          start: istToUtcIso(iDateStr, "12:00", false),
-          end: istToUtcIso(iDateStr, "21:00", false)
-        });
-
-        const nextDay = new Date(istDate.getTime() + 24 * 60 * 60 * 1000);
-        const ny = nextDay.getUTCFullYear();
-        const nm = String(nextDay.getUTCMonth() + 1).padStart(2, '0');
-        const nd = String(nextDay.getUTCDate()).padStart(2, '0');
-        const nDateStr = `${ny}-${nm}-${nd}`;
-
-        ranges.night.push({
-          start: istToUtcIso(iDateStr, "20:00", false),
-          end: istToUtcIso(nDateStr, "05:00", false)
-        });
-
-        ptr = addDays(ptr, 1);
-        count++;
-      }
-
-      const results = {};
-      await Promise.all(
-        Object.entries(ranges).map(async ([key, list]) => {
-          const chunkResults = [];
-          const BATCH_SIZE = 50; // Increased from 10 to 50 for speed
-          for (let i = 0; i < list.length; i += BATCH_SIZE) {
-            const batch = list.slice(i, i + BATCH_SIZE);
-            const batchRes = await Promise.all(batch.map(r => fetchGleapStats(r.start, r.end)));
-            chunkResults.push(...batchRes);
-          }
-          results[key] = mergeResults(chunkResults);
-        })
-      );
-      return results;
-    })();
-
-    // 3. Hourly Data (Only if <= 7 days)
-    const hourlyPromise = (async () => {
-      const diffDays = (new Date(endIso) - new Date(startIso)) / (1000 * 3600 * 24);
-      if (diffDays > 7) return null;
-
-      const ranges = {};
-      for (let h = 0; h < 24; h++) ranges[`h${h}`] = [];
-
-      let ptr = new Date(startIso);
-      const istOffset = 330 * 60 * 1000;
-
-      while (ptr <= new Date(endIso)) {
-        const istDate = new Date(ptr.getTime() + istOffset);
-        const iy = istDate.getUTCFullYear();
-        const im = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-        const id = String(istDate.getUTCDate()).padStart(2, '0');
-        const iDateStr = `${iy}-${im}-${id}`;
-
-        for (let h = 0; h < 24; h++) {
-          const hStr = String(h).padStart(2, '0');
-          ranges[`h${h}`].push({
-            start: istToUtcIso(iDateStr, `${hStr}:00:00`, false),
-            end: istToUtcIso(iDateStr, `${hStr}:59:59`, false)
-          });
-        }
-        ptr = new Date(ptr.getTime() + 24 * 60 * 60 * 1000);
-      }
-
-      const results = {};
-      await Promise.all(
-        Object.entries(ranges).map(async ([key, list]) => {
-          const chunkResults = [];
-          const BATCH_SIZE = 50; // Increased from 10 to 50
-          for (let i = 0; i < list.length; i += BATCH_SIZE) {
-            const batch = list.slice(i, i + BATCH_SIZE);
-            const batchRes = await Promise.all(batch.map(r => fetchGleapStats(r.start, r.end)));
-            chunkResults.push(...batchRes);
-          }
-          results[key] = mergeResults(chunkResults);
-        })
-      );
-      return results;
-    })();
-
-    // Execute all in parallel
-    const [overviewData, shiftsData, hourlyData] = await Promise.all([
-      overviewPromise,
-      shiftPromise,
-      hourlyPromise
-    ]);
+    // 1. Fetch Overview Data (Single Call)
+    const overviewData = await fetchGleapStats(startIso, endIso);
 
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Access-Control-Allow-Origin", "*");
+
+    // We return the same data structure, but 'shifts' will just be the overview data.
+    // The frontend will filter this data by Agent Roster to show "Morning Team", "Noon Team", etc.
+    // This avoids 160+ API calls.
 
     return res.status(200).json({
       overview: {
@@ -434,8 +290,14 @@ export default async function handler(req, res) {
         },
         agents: overviewData.agents,
       },
-      shifts: shiftsData,
-      hourly: hourlyData,
+      // Pass the same data for shifts; frontend filters by agent email
+      shifts: {
+        morning: { agents: overviewData.agents },
+        noon: { agents: overviewData.agents },
+        night: { agents: overviewData.agents }
+      },
+      // Hourly is not possible with single aggregate call, so return empty
+      hourly: {},
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
