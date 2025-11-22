@@ -1,56 +1,26 @@
+// api/team-performance.js
 import fetch from "node-fetch";
 
-// Convert seconds to "Xm" or "Y.Yh"
+// Convert raw seconds to "Xm" or "Y.h" format
 function formatDuration(rawSeconds) {
-  if (rawSeconds === null || rawSeconds === undefined) return "--";
+  if (!rawSeconds && rawSeconds !== 0) return "--";
   const seconds = Number(rawSeconds);
-  if (!Number.isFinite(seconds) || seconds <= 0) return "--";
+  if (Number.isNaN(seconds) || seconds <= 0) return "--";
 
   const minutes = seconds / 60;
   if (minutes >= 60) {
     const hours = minutes / 60;
     return `${hours.toFixed(1)}h`;
   }
-  return `${Math.round(minutes)}m`;
+  return `${minutes.toFixed(1)}m`;
 }
 
-// Map Gleap agent record into clean object for UI
-function mapAgent(agent) {
-  const u = agent.processingUser || {};
-  const m = agent;
-
-  const avgRatingStr = m.averageRating?.value || "--";
-  let ratingScore = null;
-  if (typeof avgRatingStr === "string") {
-    const match = avgRatingStr.match(/(\d+(\.\d+)?)/);
-    ratingScore = match ? parseFloat(match[1]) : null;
-  }
-
-  return {
-    agent_name:
-      u.firstName && u.lastName
-        ? `${u.firstName} ${u.lastName}`
-        : u.email || "Unknown",
-    agent_email: u.email || "",
-    profile_image: u.profileImageUrl || "",
-
-    total_tickets: m.totalCountForUser?.value ?? 0,
-    // comments_count: m.commentCount?.value ?? 0, // you said you do not need this
-    closed_tickets: m.rawClosed?.value ?? 0,
-
-    median_reply_time: formatDuration(m.medianReplyTime?.rawValue),
-    median_first_reply: formatDuration(m.medianTimeToFirstReplyInSec?.rawValue),
-    median_assignment_reply:
-      m.medianFirstAssignmentReplyTime?.value === "--"
-        ? "--"
-        : formatDuration(m.medianFirstAssignmentReplyTime?.rawValue),
-    time_to_last_close: formatDuration(m.timeToLastCloseInSec?.rawValue),
-
-    average_rating: avgRatingStr,
-    rating_score: ratingScore,
-    ticket_activity: m.ticketActivityCount?.value ?? 0,
-    hours_active: m.hoursActive?.value || "--"
-  };
+// Extract numeric rating from "😊 86" => 86
+function parseRating(value) {
+  if (typeof value !== "string") return null;
+  const match = value.match(/(\d+(\.\d+)?)/);
+  if (!match) return null;
+  return parseFloat(match[1]);
 }
 
 export default async function handler(req, res) {
@@ -58,12 +28,11 @@ export default async function handler(req, res) {
     const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
-      return res
-        .status(400)
-        .json({ error: "startDate and endDate query params are required" });
+      return res.status(400).json({
+        error: "startDate and endDate are required in UTC ISO format",
+      });
     }
 
-    // Backend trusts the UTC timestamps from frontend
     const url =
       "https://dashapi.gleap.io/v3/statistics/lists" +
       `?chartType=TEAM_PERFORMANCE_LIST` +
@@ -77,56 +46,104 @@ export default async function handler(req, res) {
       headers: {
         Authorization:
           "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE",
-        project: "64d9fa1b014ae7130f2e58d1"
-      }
+        project: "64d9fa1b014ae7130f2e58d1",
+      },
     });
 
     if (!response.ok) {
       const text = await response.text();
       console.error("Gleap error:", response.status, text);
-      return res.status(500).json({
+      return res.status(response.status).json({
         error: "Gleap API error",
         status: response.status,
-        body: text
+        body: text,
       });
     }
 
     const raw = await response.json();
-    const arr = raw?.data || raw?.list || [];
+    const list = Array.isArray(raw?.data) ? raw.data : [];
 
-    const agents = Array.isArray(arr) ? arr.map(mapAgent) : [];
+    // Map and filter out "Unknown" / no-user rows
+    const agents = list
+      .map((item) => {
+        const user = item.processingUser || {};
+        const hasIdentity =
+          !!user.email || !!user.firstName || !!user.lastName;
 
-    // Totals for summary cards
+        if (!hasIdentity) return null; // skip "Unknown" rows
+
+        const agentName =
+          (user.firstName || "") + " " + (user.lastName || "");
+        const trimmedName = agentName.trim() || user.email || "Unknown";
+
+        const totalTickets = item.totalCountForUser?.value || 0;
+
+        const medianReplyTime = formatDuration(
+          item.medianReplyTime?.rawValue ?? null
+        );
+        const medianFirstReply = formatDuration(
+          item.medianTimeToFirstReplyInSec?.rawValue ?? null
+        );
+        const medianAssignmentReply = formatDuration(
+          item.medianFirstAssignmentReplyTime?.rawValue ?? null
+        );
+        const timeToLastClose = formatDuration(
+          item.timeToLastCloseInSec?.rawValue ?? null
+        );
+
+        const averageRatingStr = item.averageRating?.value || "--";
+        const ratingNumeric = parseRating(averageRatingStr);
+
+        return {
+          agent_name: trimmedName,
+          agent_email: user.email || "",
+          profile_image: user.profileImageUrl || "",
+          total_tickets: totalTickets,
+          closed_tickets: item.rawClosed?.value || 0,
+          median_reply_time: medianReplyTime,
+          median_first_reply: medianFirstReply,
+          median_assignment_reply: medianAssignmentReply,
+          time_to_last_close: timeToLastClose,
+          average_rating: averageRatingStr,
+          rating_numeric: ratingNumeric,
+          ticket_activity: item.ticketActivityCount?.value || 0,
+          hours_active: item.hoursActive?.value || "--",
+        };
+      })
+      .filter((a) => a !== null);
+
+    // Totals
     const totalAgents = agents.length;
     const totalTickets = agents.reduce(
-      (sum, a) => sum + (Number(a.total_tickets) || 0),
+      (sum, a) => sum + (a.total_tickets || 0),
       0
     );
-    const ratings = agents
-      .map(a => a.rating_score)
-      .filter(v => typeof v === "number" && !Number.isNaN(v));
+
+    const ratingValues = agents
+      .map((a) => a.rating_numeric)
+      .filter((n) => typeof n === "number");
     const avgRating =
-      ratings.length > 0
-        ? ratings.reduce((sum, v) => sum + v, 0) / ratings.length
+      ratingValues.length > 0
+        ? ratingValues.reduce((s, n) => s + n, 0) / ratingValues.length
         : 0;
 
     res.setHeader("Access-Control-Allow-Origin", "*");
-    return res.status(200).json({
+    res.status(200).json({
       startDate,
       endDate,
       totals: {
         total_agents: totalAgents,
         total_tickets: totalTickets,
-        avg_rating: avgRating
+        avg_rating: avgRating,
       },
-      agents
+      agents,
     });
   } catch (err) {
     console.error("team-performance API error:", err);
     res.setHeader("Access-Control-Allow-Origin", "*");
-    return res.status(500).json({
+    res.status(500).json({
       error: "Failed to fetch team performance",
-      details: err.message
+      details: err.message,
     });
   }
 }

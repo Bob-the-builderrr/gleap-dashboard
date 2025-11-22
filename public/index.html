@@ -1,103 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
-  <title>Team Performance Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div class="page">
-    <header class="header">
-      <h1>Team Performance</h1>
-      <p class="subtitle">
-        Gleap support metrics in IST, converted to UTC behind the scenes.
-      </p>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Team Performance Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <h1>Team Performance</h1>
+        <p>Live view of Gleap team stats by time range (IST → UTC)</p>
+      </header>
 
-    <section class="filters">
-      <div class="filters-left">
-        <div class="field">
-          <label>Start date</label>
+      <section class="filters">
+        <div class="filter-group">
+          <label>Start Date (IST)</label>
           <input type="date" id="startDate" />
         </div>
-        <div class="field">
-          <label>Start time (optional)</label>
+        <div class="filter-group">
+          <label>Start Time (optional, IST)</label>
           <input type="time" id="startTime" />
         </div>
-        <div class="field">
-          <label>End date</label>
+        <div class="filter-group">
+          <label>End Date (IST)</label>
           <input type="date" id="endDate" />
         </div>
-        <div class="field">
-          <label>End time (optional)</label>
+        <div class="filter-group">
+          <label>End Time (optional, IST)</label>
           <input type="time" id="endTime" />
         </div>
-      </div>
-      <div class="filters-right">
-        <button id="fetchBtn" class="primary-btn">Fetch Data</button>
-        <div class="quick-buttons">
-          <button data-hours="1">Last 1 Hour</button>
-          <button data-hours="2">Last 2 Hours</button>
-          <button data-hours="4">Last 4 Hours</button>
+        <div class="filter-actions">
+          <button id="fetchBtn">Fetch Data</button>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="summary">
-      <div class="card" id="totalTicketsCard">
-        <div class="card-label">Total Tickets</div>
-        <div class="card-value" id="totalTicketsValue">--</div>
-      </div>
-      <div class="card" id="averageRatingCard">
-        <div class="card-label">Average Rating</div>
-        <div class="card-value" id="averageRatingValue">--</div>
-      </div>
-      <div class="card" id="totalAgentsCard">
-        <div class="card-label">Active Agents</div>
-        <div class="card-value" id="totalAgentsValue">--</div>
-      </div>
-    </section>
+      <section class="quick-range">
+        <span>Quick Range:</span>
+        <button data-hours="1">Last 1 Hour</button>
+        <button data-hours="2">Last 2 Hours</button>
+        <button data-hours="4">Last 4 Hours</button>
+      </section>
 
-    <section class="table-section">
-      <div class="table-header">
-        <h2>Agent level performance</h2>
-        <p class="table-caption">
-          Click on the "Total Tickets" header to sort by who handled the most tickets.
-        </p>
-      </div>
-      <div class="table-wrapper">
-        <table id="resultTable">
-          <thead>
-            <tr>
-              <th data-sort="agent_name">Agent</th>
-              <th data-sort="total_tickets" class="sortable active">
-                Total Tickets
-              </th>
-              <th data-sort="closed_tickets" class="sortable">Closed</th>
-              <th>Median Reply</th>
-              <th>First Reply</th>
-              <th>Assign Reply</th>
-              <th>Last Close</th>
-              <th data-sort="rating_score" class="sortable">Rating</th>
-              <th data-sort="ticket_activity" class="sortable">Activity</th>
-              <th>Hours Active</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+      <section class="summary">
+        <div class="card" id="totalTicketsCard">
+          <div class="card-label">Total Tickets</div>
+          <div class="card-value" id="totalTickets">0</div>
+        </div>
+        <div class="card" id="avgRatingCard">
+          <div class="card-label">Average Rating</div>
+          <div class="card-value" id="avgRating">0.0</div>
+        </div>
+        <div class="card" id="totalAgentsCard">
+          <div class="card-label">Active Agents</div>
+          <div class="card-value" id="totalAgents">0</div>
+        </div>
+      </section>
 
-    <div id="loadingOverlay" class="loading-overlay hidden">
-      <div class="spinner"></div>
-      <div class="loading-text">Loading metrics...</div>
+      <section class="table-section">
+        <div class="table-header">
+          <h2>Agent Breakdown</h2>
+          <span class="note">Click on "Total Tickets" to sort</span>
+        </div>
+        <div class="table-wrapper">
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th data-sort-key="total_tickets">Total Tickets</th>
+                <th data-sort-key="closed_tickets">Closed</th>
+                <th>Median Reply</th>
+                <th>First Reply</th>
+                <th>Time To Last Close</th>
+                <th data-sort-key="rating_numeric">Rating</th>
+                <th data-sort-key="ticket_activity">Activity</th>
+                <th>Hours Active</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div id="loadingOverlay" class="loading hidden">
+        <div class="spinner"></div>
+        <div>Loading data...</div>
+      </div>
+
+      <script src="dashboard.js"></script>
     </div>
-  </div>
-
-  <script src="dashboard.js"></script>
-</body>
+  </body>
 </html>
