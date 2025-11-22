@@ -1,4 +1,5 @@
-const IST_OFFSET_MIN = 330; // +05:30
+// public/dashboard.js
+
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let agentsData = [];
@@ -24,25 +25,34 @@ const dom = {
   autoRefresh: document.getElementById("autoRefresh"),
 };
 
-function looksLikeIsoWithTz(value) {
-  return /([zZ]|[+-]\d{2}:?\d{2})$/.test(value);
-}
-
+/**
+ * Format a Date object into the yyyy-mm-ddThh:mm string
+ * that <input type="datetime-local"> expects, using LOCAL time.
+ */
 function toIstInputValue(date) {
-  const istDate = new Date(date.getTime() + IST_OFFSET_MIN * 60000);
-  const y = istDate.getUTCFullYear();
-  const m = String(istDate.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(istDate.getUTCDate()).padStart(2, "0");
-  const h = String(istDate.getUTCHours()).padStart(2, "0");
-  const min = String(istDate.getUTCMinutes()).padStart(2, "0");
+  // Note: despite the name, this now uses the browser's local timezone.
+  const local = new Date(date);
+  const y = local.getFullYear();
+  const m = String(local.getMonth() + 1).padStart(2, "0");
+  const d = String(local.getDate()).padStart(2, "0");
+  const h = String(local.getHours()).padStart(2, "0");
+  const min = String(local.getMinutes()).padStart(2, "0");
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
+/**
+ * Parse a user input date/time and convert it to a UTC ISO string.
+ * Accepts:
+ *  - "yyyy-mm-ddThh:mm" (from datetime-local)
+ *  - "yyyy-mm-dd hh:mm"
+ *  - "dd-mm-yyyy hh:mm"
+ * If time is missing, uses 00:00 for start, 23:59 for end.
+ * Uses LOCAL timezone automatically, then converts to UTC.
+ */
 function parseIstInput(value, isEndOfDay) {
   const trimmed = (value || "").trim();
   if (!trimmed) throw new Error("Please select both start and end dates.");
 
-  // Supports "yyyy-mm-ddThh:mm" (datetime-local) and "dd-mm-yyyy hh:mm"
   let datePart = "";
   let timePart = "";
 
@@ -52,38 +62,43 @@ function parseIstInput(value, isEndOfDay) {
     [datePart, timePart] = trimmed.split(" ");
   }
 
+  datePart = (datePart || "").replace(/\//g, "-");
+
   if (!timePart || timePart === "") {
-    timePart = isEndOfDay ? "23:59:59" : "00:00";
+    timePart = isEndOfDay ? "23:59" : "00:00";
   }
 
-  // Normalize separators
-  datePart = datePart.replace(/\//g, "-");
+  let normalized;
 
-  let year, month, day;
   if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-    [year, month, day] = datePart.split("-").map(Number);
+    // yyyy-mm-dd
+    normalized = `${datePart}T${timePart}`;
   } else if (/^\d{2}-\d{2}-\d{4}$/.test(datePart)) {
-    [day, month, year] = datePart.split("-").map(Number);
+    // dd-mm-yyyy
+    const [day, month, year] = datePart.split("-").map(Number);
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
+      throw new Error("Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd.");
+    }
+    const y = String(year).padStart(4, "0");
+    const m = String(month).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    normalized = `${y}-${m}-${d}T${timePart}`;
   } else {
     throw new Error("Invalid date format. Use dd-mm-yyyy or yyyy-mm-dd.");
   }
 
-  const [hour = 0, minute = 0, second = isEndOfDay ? 59 : 0] = timePart
-    .split(":")
-    .map(Number);
-  if (
-    [year, month, day, hour, minute, second].some((n) => Number.isNaN(n)) ||
-    hour > 23 ||
-    minute > 59 ||
-    second > 59
-  ) {
+  const date = new Date(normalized); // interpreted as LOCAL time
+  if (Number.isNaN(date.getTime())) {
     throw new Error("Invalid time format.");
   }
 
-  // Always treat the input as IST and convert to UTC explicitly
-  const istAsUtc = Date.UTC(year, month - 1, day, hour, minute, second);
-  const utcMs = istAsUtc - IST_OFFSET_MIN * 60 * 1000;
-  return new Date(utcMs).toISOString();
+  if (isEndOfDay) {
+    // Push to the end of the selected minute
+    date.setSeconds(59, 999);
+  }
+
+  // Convert local time to UTC ISO string
+  return date.toISOString();
 }
 
 function setInputsForRange(startUtc, endUtc) {
@@ -400,7 +415,7 @@ function bindEvents() {
 
 function init() {
   bindEvents();
-  // Default: load last 1 hour window (IST-aware inputs, UTC query)
+  // Default: load last 1 hour window (local-time inputs, UTC query)
   const endUtc = new Date();
   const startUtc = new Date(endUtc.getTime() - 60 * 60 * 1000);
   setInputsForRange(startUtc, endUtc);
