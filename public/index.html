@@ -1,35 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gleap Dashboard (Turso Cloud)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
 <h1>Gleap Live Ticket Dashboard</h1>
 
-<div class="section">
-  <h2>Summary</h2>
-  <div class="top">
-    <div class="box">
-      <h3>Total Tickets</h3>
-      <p id="totalTickets">0</p>
-    </div>
+<!-- TAB BUTTONS -->
+<div class="tabs">
+  <button class="tab active" onclick="showTab('all')">All Tickets</button>
+  <button class="tab" onclick="showTab('archived')">Archived Tickets</button>
+</div>
 
-    <div class="box">
-      <h3>Plan Breakdown</h3>
-      <div id="planBreakdown"></div>
+<!-- ALL TICKETS TAB -->
+<div id="allTab">
+  <div class="section">
+    <h2>Summary</h2>
+
+    <div class="top">
+      <div class="box">
+        <h3>Total Tickets</h3>
+        <p id="totalTickets">0</p>
+      </div>
+
+      <div class="box">
+        <h3>Plan Breakdown</h3>
+        <div id="planBreakdown"></div>
+      </div>
     </div>
+  </div>
+
+  <div class="section">
+    <h2>Live Tickets</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>Open Tickets</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>User Email</th>
+          <th>Plan</th>
+          <th>Tags</th>
+        </tr>
+      </thead>
+      <tbody id="ticketRows"></tbody>
+    </table>
   </div>
 </div>
 
-<div class="section">
-  <h2>Live Tickets</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Agent</th>
-        <th>Open Tickets</th>
-        <th>Priority</th>
-        <th>Status</th>
-        <th>Duration</th>
-        <th>User Email</th>
-        <th>Plan</th>
-        <th>Tags</th>
-      </tr>
-    </thead>
-    <tbody id="ticketRows"></tbody>
-  </table>
+<!-- ARCHIVED TAB -->
+<div id="archivedTab" style="display:none;">
+  <div class="section">
+    <h2>Archived Tickets</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>Ticket ID</th>
+          <th>Total Count</th>
+          <th>Date (IST)</th>
+          <th>Time (IST)</th>
+        </tr>
+      </thead>
+      <tbody id="archivedRows"></tbody>
+    </table>
+  </div>
 </div>
+
+<script src="dashboard.js"></script>
+
+</body>
+</html>

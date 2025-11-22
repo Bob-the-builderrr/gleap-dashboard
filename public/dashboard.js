@@ -1,19 +1,37 @@
-async function load() {
-  // Fetch from Vercel API
+/* ---------------------------
+   TAB SWITCHING
+---------------------------- */
+function showTab(name) {
+  document.getElementById("allTab").style.display =
+    name === "all" ? "block" : "none";
+  document.getElementById("archivedTab").style.display =
+    name === "archived" ? "block" : "none";
+
+  document.querySelectorAll(".tab").forEach(btn =>
+    btn.classList.remove("active")
+  );
+
+  document
+    .querySelector(`.tab[onclick="showTab('${name}')"]`)
+    .classList.add("active");
+}
+
+/* ---------------------------
+   LOAD ALL TICKETS
+---------------------------- */
+async function loadAll() {
   const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
   const data = await res.json();
 
-  // Rows that actually have a ticket
   const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
 
-  // ---------- TOTAL TICKETS (sum of open tickets) ----------
   const totalTickets = valid.reduce(
     (sum, r) => sum + Number(r.agent_open_ticket || 0),
     0
   );
+
   document.getElementById("totalTickets").innerText = totalTickets;
 
-  // ---------- PLAN BREAKDOWN (weighted by open tickets) ----------
   const plan = {};
   valid.forEach(r => {
     const key = r.plan_type || "UNKNOWN_PLAN";
@@ -27,14 +45,10 @@ async function load() {
     planDiv.innerHTML += `<p>${k}: ${v}</p>`;
   });
 
-  // ---------- TABLE (valid rows first, then empty ones) ----------
-  const empty = data.filter(r => !r.ticket_id || r.ticket_id === "-");
-  const ordered = [...valid, ...empty];
-
   const tbody = document.getElementById("ticketRows");
   tbody.innerHTML = "";
 
-  ordered.forEach(r => {
+  valid.forEach(r => {
     tbody.innerHTML += `
       <tr>
         <td>${r.agent_name}</td>
@@ -50,4 +64,53 @@ async function load() {
   });
 }
 
-load();
+/* ---------------------------
+   LOAD ARCHIVED TICKETS
+---------------------------- */
+async function loadArchived() {
+  const res = await fetch(
+    "https://dashapi.gleap.io/v3/tickets?skip=0&limit=200&archived=true&type[]=INQUIRY&ignoreArchived=true&isSpam=false&sort=-lastNotification",
+    {
+      headers: {
+        "Authorization": "Bearer YOUR_TOKEN_HERE",
+        "Accept": "application/json",
+        "project": "64d9fa1b014ae7130f2e58d1"
+      }
+    }
+  );
+
+  const data = await res.json();
+  const tickets = data.tickets || [];
+
+  const tbody = document.getElementById("archivedRows");
+  tbody.innerHTML = "";
+
+  tickets.forEach(t => {
+    const agent = t.processingUser || {};
+    const fullName =
+      `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.email;
+
+    const d = new Date(t.archivedAt);
+    const dateIST = d.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" });
+    const timeIST = d.toLocaleTimeString("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour12: false
+    });
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${fullName}</td>
+        <td>${t.id}</td>
+        <td>${t.totalCount || "-"}</td>
+        <td>${dateIST}</td>
+        <td>${timeIST}</td>
+      </tr>
+    `;
+  });
+}
+
+/* ---------------------------
+   INITIAL LOAD
+---------------------------- */
+loadAll();
+loadArchived();
