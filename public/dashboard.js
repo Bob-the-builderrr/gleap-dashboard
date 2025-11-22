@@ -3,11 +3,13 @@
 ============================ */
 function showTab(name) {
   document.getElementById("allTab").style.display =
-    name === "all" ? "none" : "none";
+    name === "all" ? "block" : "none";
   document.getElementById("archivedTab").style.display =
     name === "archived" ? "block" : "none";
   document.getElementById("plansTab").style.display =
     name === "plans" ? "block" : "none";
+  document.getElementById("teamTab").style.display =
+    name === "team" ? "block" : "none";
 
   document.querySelectorAll(".tab").forEach(btn =>
     btn.classList.remove("active")
@@ -25,102 +27,125 @@ function showTab(name) {
   } else if (name === 'plans') {
     loadPlanSummary();
   }
+  // Team performance requires manual load with dates
 }
 
 /* ============================
-   LOAD PLAN SUMMARY
+   LOAD TEAM PERFORMANCE
 ============================ */
-async function loadPlanSummary() {
+async function loadTeamPerformance() {
   try {
-    console.log("Loading plan summary...");
-    const res = await fetch("/api/plan-summary");
-    const data = await res.json();
-
-    console.log("Plan summary response:", data);
-
-    const summaryDiv = document.getElementById("planSummary");
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
     
-    if (data.error) {
-      summaryDiv.innerHTML = `<p style="color: red;">Error loading plan summary</p>`;
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates');
       return;
     }
 
-    const timeIST = data.time_ist || new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
+    // Convert dates to UTC format (YYYY-MM-DDTHH:mm:ss.sssZ)
+    const startUTC = new Date(startDate + 'T00:00:00.000Z').toISOString();
+    const endUTC = new Date(endDate + 'T23:59:59.999Z').toISOString();
 
-    summaryDiv.innerHTML = `
-      <div class="plan-summary-header">
-        <h3>📊 Plan Distribution (${timeIST} IST)</h3>
-        <div class="total-tickets">Total Tickets: <strong>${data.total_tickets}</strong></div>
+    console.log(`Loading team performance for: ${startUTC} to ${endUTC}`);
+
+    const performanceDiv = document.getElementById("teamPerformance");
+    performanceDiv.innerHTML = '<p>Loading team performance data...</p>';
+
+    const res = await fetch(`/api/team-performance?startDate=${startUTC}&endDate=${endUTC}`);
+    const data = await res.json();
+
+    console.log("Team performance response:", data);
+
+    if (data.error) {
+      performanceDiv.innerHTML = `<p style="color: red;">Error loading team performance: ${data.details}</p>`;
+      return;
+    }
+
+    if (data.agents.length === 0) {
+      performanceDiv.innerHTML = `
+        <div class="no-data">
+          <h3>No performance data found</h3>
+          <p>No team performance data available for the selected date range (${startDate} to ${endDate}).</p>
+        </div>
+      `;
+      return;
+    }
+
+    performanceDiv.innerHTML = `
+      <div class="performance-header">
+        <h3>📈 Team Performance (${startDate} to ${endDate})</h3>
+        <div class="agent-count">Total Agents: <strong>${data.total_agents}</strong></div>
       </div>
 
-      <div class="plan-cards">
-        <div class="plan-card base-plan">
-          <div class="plan-emoji">🟢</div>
-          <div class="plan-info">
-            <div class="plan-name">BASE PLAN</div>
-            <div class="plan-count">${data.summary.base_plan}</div>
-          </div>
-        </div>
-
-        <div class="plan-card pro-plan">
-          <div class="plan-emoji">🚀</div>
-          <div class="plan-info">
-            <div class="plan-name">PRO PLAN</div>
-            <div class="plan-count">${data.summary.pro_plan}</div>
-          </div>
-        </div>
-
-        <div class="plan-card trial-plan">
-          <div class="plan-emoji">📦</div>
-          <div class="plan-info">
-            <div class="plan-name">TRIAL PLAN</div>
-            <div class="plan-count">${data.summary.trial_plan}</div>
-          </div>
-        </div>
-
-        <div class="plan-card custom-plan">
-          <div class="plan-emoji">💎</div>
-          <div class="plan-info">
-            <div class="plan-name">CUSTOM PLAN</div>
-            <div class="plan-count">${data.summary.custom_plan}</div>
-          </div>
-        </div>
-      </div>
-
-      ${data.custom_details && data.custom_details.length > 0 ? `
-        <div class="custom-details">
-          <h4>Custom Plan Breakdown:</h4>
-          <div class="custom-list">
-            ${data.custom_details.map(detail => `<div class="custom-item">${detail}</div>`).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      <div class="full-breakdown">
-        <h4>Full Plan Breakdown:</h4>
-        <table class="breakdown-table">
+      <div class="performance-table-container">
+        <table class="performance-table">
           <thead>
             <tr>
-              <th>Plan Type</th>
-              <th>Count</th>
+              <th>Agent</th>
+              <th>Total Tickets</th>
+              <th>Closed</th>
+              <th>Comments</th>
+              <th>Median Reply</th>
+              <th>First Reply</th>
+              <th>Assignment Reply</th>
+              <th>Last Close</th>
+              <th>Rating</th>
+              <th>Activity</th>
+              <th>Hours Active</th>
             </tr>
           </thead>
           <tbody>
-            ${data.breakdown.map(item => `
+            ${data.agents.map(agent => `
               <tr>
-                <td>${item.emoji} ${item.plan}</td>
-                <td><strong>${item.count}</strong></td>
+                <td class="agent-cell">
+                  <div class="agent-info">
+                    ${agent.profile_image ? `<img src="${agent.profile_image}" alt="${agent.agent_name}" class="agent-avatar">` : ''}
+                    <div>
+                      <div class="agent-name">${agent.agent_name}</div>
+                      <div class="agent-email">${agent.agent_email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="metric-cell"><strong>${agent.total_tickets}</strong></td>
+                <td class="metric-cell">${agent.closed_tickets}</td>
+                <td class="metric-cell">${agent.comments_count}</td>
+                <td class="time-cell">${agent.median_reply_time}</td>
+                <td class="time-cell">${agent.median_first_reply}</td>
+                <td class="time-cell">${agent.median_assignment_reply}</td>
+                <td class="time-cell">${agent.time_to_last_close}</td>
+                <td class="rating-cell">${agent.average_rating}</td>
+                <td class="metric-cell">${agent.ticket_activity}</td>
+                <td class="metric-cell">${agent.hours_active}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       </div>
+
+      <div class="performance-summary">
+        <h4>Performance Summary:</h4>
+        <div class="summary-stats">
+          <div class="summary-stat">
+            <span class="stat-label">Total Tickets Handled:</span>
+            <span class="stat-value">${data.agents.reduce((sum, agent) => sum + agent.total_tickets, 0)}</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-label">Total Closed:</span>
+            <span class="stat-value">${data.agents.reduce((sum, agent) => sum + agent.closed_tickets, 0)}</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-label">Active Agents:</span>
+            <span class="stat-value">${data.agents.filter(agent => agent.total_tickets > 0).length}</span>
+          </div>
+        </div>
+      </div>
     `;
 
   } catch (err) {
-    console.error("Error loading plan summary:", err);
-    document.getElementById("planSummary").innerHTML = 
-      `<p style="color: red;">Error loading plan summary: ${err.message}</p>`;
+    console.error("Error loading team performance:", err);
+    document.getElementById("teamPerformance").innerHTML = 
+      `<p style="color: red;">Error loading team performance: ${err.message}</p>`;
   }
 }
 
@@ -141,5 +166,6 @@ setInterval(() => {
   } else if (activeTab.includes("'plans'")) {
     loadPlanSummary();
   }
+  // Team performance doesn't auto-refresh (requires date selection)
   loadStatistics(); // Always refresh statistics
 }, 30000);

@@ -1,7 +1,61 @@
 /* Add to existing CSS */
 
-/* Plan Summary Styles */
-.plan-summary-header {
+/* Team Performance Styles */
+.date-picker-section {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  border-left: 4px solid #007bff;
+}
+
+.date-inputs {
+  display: flex;
+  gap: 15px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.date-input {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.date-input label {
+  font-weight: bold;
+  color: #333;
+  font-size: 14px;
+}
+
+.date-input input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.load-btn {
+  padding: 8px 20px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  height: fit-content;
+}
+
+.load-btn:hover {
+  background: #0056b3;
+}
+
+.date-note {
+  margin-top: 10px;
+  color: #666;
+}
+
+.performance-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -10,94 +64,138 @@
   border-bottom: 2px solid #eee;
 }
 
-.total-tickets {
-  font-size: 18px;
+.agent-count {
+  font-size: 16px;
   color: #007bff;
 }
 
-.plan-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
+.performance-table-container {
+  overflow-x: auto;
   margin-bottom: 25px;
 }
 
-.plan-card {
-  display: flex;
-  align-items: center;
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  border-left: 5px solid;
-}
-
-.plan-card.base-plan { border-left-color: #28a745; }
-.plan-card.pro-plan { border-left-color: #007bff; }
-.plan-card.trial-plan { border-left-color: #6c757d; }
-.plan-card.custom-plan { border-left-color: #e83e8c; }
-
-.plan-emoji {
-  font-size: 2em;
-  margin-right: 15px;
-}
-
-.plan-info {
-  flex: 1;
-}
-
-.plan-name {
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.plan-count {
-  font-size: 24px;
-  font-weight: bold;
-  color: #007bff;
-}
-
-.custom-details {
-  margin: 25px 0;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.custom-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.custom-item {
-  padding: 8px 12px;
-  background: white;
-  border-radius: 6px;
-  border-left: 3px solid #e83e8c;
-}
-
-.full-breakdown {
-  margin-top: 25px;
-}
-
-.breakdown-table {
+.performance-table {
   width: 100%;
   background: white;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  font-size: 14px;
 }
 
-.breakdown-table th {
+.performance-table th {
   background: #6c757d;
   color: white;
-  padding: 12px;
-  text-align: left;
+  padding: 12px 8px;
+  text-align: center;
+  font-weight: bold;
+  white-space: nowrap;
 }
 
-.breakdown-table td {
-  padding: 12px;
+.performance-table td {
+  padding: 10px 8px;
   border-bottom: 1px solid #eee;
+  text-align: center;
+}
+
+.agent-cell {
+  text-align: left !important;
+}
+
+.agent-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.agent-name {
+  font-weight: bold;
+  color: #333;
+}
+
+.agent-email {
+  font-size: 12px;
+  color: #666;
+}
+
+.metric-cell {
+  font-weight: bold;
+  color: #007bff;
+}
+
+.time-cell {
+  font-family: monospace;
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.rating-cell {
+  font-weight: bold;
+  color: #28a745;
+}
+
+.performance-summary {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.summary-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.stat-label {
+  font-weight: bold;
+  color: #333;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #007bff;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .date-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .performance-table {
+    font-size: 12px;
+  }
+  
+  .performance-table th,
+  .performance-table td {
+    padding: 8px 4px;
+  }
 }

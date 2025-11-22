@@ -23,6 +23,7 @@
   <button class="tab active" onclick="showTab('all')">All Tickets</button>
   <button class="tab" onclick="showTab('archived')">Archived Tickets</button>
   <button class="tab" onclick="showTab('plans')">Plan Summary</button>
+  <button class="tab" onclick="showTab('team')">Team Performance</button>
 </div>
 
 <!-- DASHBOARD SUMMARY -->
@@ -88,12 +89,42 @@
   </div>
 </div>
 
-<!-- NEW: PLAN SUMMARY TAB -->
+<!-- PLAN SUMMARY TAB -->
 <div id="plansTab" style="display:none;">
   <div class="section">
     <h2>Plan Summary Analysis</h2>
     <div id="planSummary">
       <p>Loading plan summary...</p>
+    </div>
+  </div>
+</div>
+
+<!-- NEW: TEAM PERFORMANCE TAB -->
+<div id="teamTab" style="display:none;">
+  <div class="section">
+    <h2>Team Performance</h2>
+    
+    <!-- Date Picker Section -->
+    <div class="date-picker-section">
+      <div class="date-inputs">
+        <div class="date-input">
+          <label for="startDate">Start Date:</label>
+          <input type="date" id="startDate" value="${new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
+        </div>
+        <div class="date-input">
+          <label for="endDate">End Date:</label>
+          <input type="date" id="endDate" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+        <button onclick="loadTeamPerformance()" class="load-btn">Load Performance Data</button>
+      </div>
+      <div class="date-note">
+        <small>Dates are in UTC format. Data will be fetched for the selected range.</small>
+      </div>
+    </div>
+
+    <!-- Performance Data -->
+    <div id="teamPerformance">
+      <p>Select dates and click "Load Performance Data" to view team metrics.</p>
     </div>
   </div>
 </div>
