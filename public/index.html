@@ -1,93 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Team Performance Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="page">
-      <header class="header">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Performance Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="header-main">
         <h1>Team Performance</h1>
-        <p>Live view of Gleap team stats by time range (IST → UTC)</p>
-      </header>
+        <div class="header-controls">
+          <button id="exportBtn" class="secondary-btn" title="Export to CSV">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export
+          </button>
+          <div class="auto-refresh">
+            <label class="toggle">
+              <input type="checkbox" id="autoRefresh">
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="toggle-label">Auto Refresh (5 min)</span>
+          </div>
+        </div>
+      </div>
+      <p class="subtitle">
+        Gleap support metrics in IST, converted to UTC behind the scenes.
+        <span id="lastUpdated" class="last-updated"></span>
+      </p>
+    </header>
 
-      <section class="filters">
-        <div class="filter-group">
-          <label>Start Date (IST)</label>
+    <section class="filters">
+      <div class="filters-left">
+        <div class="field">
+          <label>Start date</label>
           <input type="date" id="startDate" />
         </div>
-        <div class="filter-group">
-          <label>Start Time (optional, IST)</label>
+        <div class="field">
+          <label>Start time (optional)</label>
           <input type="time" id="startTime" />
         </div>
-        <div class="filter-group">
-          <label>End Date (IST)</label>
+        <div class="field">
+          <label>End date</label>
           <input type="date" id="endDate" />
         </div>
-        <div class="filter-group">
-          <label>End Time (optional, IST)</label>
+        <div class="field">
+          <label>End time (optional)</label>
           <input type="time" id="endTime" />
         </div>
-        <div class="filter-actions">
-          <button id="fetchBtn">Fetch Data</button>
-        </div>
-      </section>
-
-      <section class="quick-range">
-        <span>Quick Range:</span>
-        <button data-hours="1">Last 1 Hour</button>
-        <button data-hours="2">Last 2 Hours</button>
-        <button data-hours="4">Last 4 Hours</button>
-      </section>
-
-      <section class="summary">
-        <div class="card" id="totalTicketsCard">
-          <div class="card-label">Total Tickets</div>
-          <div class="card-value" id="totalTickets">0</div>
-        </div>
-        <div class="card" id="avgRatingCard">
-          <div class="card-label">Average Rating</div>
-          <div class="card-value" id="avgRating">0.0</div>
-        </div>
-        <div class="card" id="totalAgentsCard">
-          <div class="card-label">Active Agents</div>
-          <div class="card-value" id="totalAgents">0</div>
-        </div>
-      </section>
-
-      <section class="table-section">
-        <div class="table-header">
-          <h2>Agent Breakdown</h2>
-          <span class="note">Click on "Total Tickets" to sort</span>
-        </div>
-        <div class="table-wrapper">
-          <table id="resultTable">
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th data-sort-key="total_tickets">Total Tickets</th>
-                <th data-sort-key="closed_tickets">Closed</th>
-                <th>Median Reply</th>
-                <th>First Reply</th>
-                <th>Time To Last Close</th>
-                <th data-sort-key="rating_numeric">Rating</th>
-                <th data-sort-key="ticket_activity">Activity</th>
-                <th>Hours Active</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <div id="loadingOverlay" class="loading hidden">
-        <div class="spinner"></div>
-        <div>Loading data...</div>
       </div>
+      <div class="filters-right">
+        <div class="action-buttons">
+          <button id="fetchBtn" class="primary-btn">
+            <span class="btn-content">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Fetch Data
+            </span>
+          </button>
+          <button id="clearBtn" class="secondary-btn">Clear</button>
+        </div>
+        <div class="quick-buttons">
+          <button data-hours="1" title="Shortcut: 1">Last 1 Hour</button>
+          <button data-hours="2" title="Shortcut: 2">Last 2 Hours</button>
+          <button data-hours="4" title="Shortcut: 4">Last 4 Hours</button>
+          <button data-hours="24" title="Shortcut: 8">Last 24 Hours</button>
+        </div>
+      </div>
+    </section>
 
-      <script src="dashboard.js"></script>
+    <section class="summary">
+      <div class="card" id="totalTicketsCard">
+        <div class="card-label">Total Tickets</div>
+        <div class="card-value" id="totalTicketsValue">--</div>
+        <div class="card-trend" id="totalTicketsTrend"></div>
+      </div>
+      <div class="card" id="averageRatingCard">
+        <div class="card-label">Average Rating</div>
+        <div class="card-value" id="averageRatingValue">--</div>
+        <div class="card-trend" id="averageRatingTrend"></div>
+      </div>
+      <div class="card" id="totalAgentsCard">
+        <div class="card-label">Active Agents</div>
+        <div class="card-value" id="totalAgentsValue">--</div>
+        <div class="card-trend" id="totalAgentsTrend"></div>
+      </div>
+      <div class="card" id="responseTimeCard">
+        <div class="card-label">Avg Response Time</div>
+        <div class="card-value" id="responseTimeValue">--</div>
+        <div class="card-trend" id="responseTimeTrend"></div>
+      </div>
+    </section>
+
+    <section class="table-section">
+      <div class="table-header">
+        <div>
+          <h2>Agent Level Performance</h2>
+          <p class="table-caption">
+            Click on column headers to sort. Showing <span id="visibleAgentsCount">0</span> active agents.
+          </p>
+        </div>
+        <div class="table-controls">
+          <div class="search-field">
+            <input type="text" id="agentSearch" placeholder="Search agents..." />
+          </div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="resultTable">
+          <thead>
+            <tr>
+              <th data-sort="agent_name" class="sortable">Agent</th>
+              <th data-sort="total_tickets" class="sortable active">
+                Total Tickets <span class="sort-indicator">↓</span>
+              </th>
+              <th data-sort="closed_tickets" class="sortable">Closed</th>
+              <th data-sort="median_reply_seconds" class="sortable">Median Reply</th>
+              <th data-sort="median_first_reply_seconds" class="sortable">First Reply</th>
+              <th data-sort="median_assignment_reply_seconds" class="sortable">Assign Reply</th>
+              <th data-sort="time_to_last_close_seconds" class="sortable">Last Close</th>
+              <th data-sort="rating_score" class="sortable">Rating</th>
+              <th data-sort="ticket_activity" class="sortable">Activity</th>
+              <th data-sort="hours_active" class="sortable">Hours Active</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Skeleton loading rows will be inserted here -->
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <div class="pagination">
+          <button id="prevPage" class="pagination-btn" disabled>Previous</button>
+          <span class="pagination-info">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+          <button id="nextPage" class="pagination-btn" disabled>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="keyboard-hint">
+      <span>Press 1,2,4,8 for quick time periods • R to refresh</span>
     </div>
-  </body>
+  </div>
+
+  <!-- Enhanced Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading team performance metrics...</div>
+      <div class="loading-details" id="loadingDetails"></div>
+    </div>
+  </div>
+
+  <!-- Error Toast -->
+  <div id="errorToast" class="toast hidden">
+    <div class="toast-content">
+      <span class="toast-message" id="toastMessage"></span>
+      <button class="toast-close" onclick="this.parentElement.parentElement.classList.add('hidden')">×</button>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
 </html>

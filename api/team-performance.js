@@ -1,26 +1,103 @@
-// api/team-performance.js
 import fetch from "node-fetch";
 
-// Convert raw seconds to "Xm" or "Y.h" format
+// Enhanced duration formatting with better validation
 function formatDuration(rawSeconds) {
-  if (!rawSeconds && rawSeconds !== 0) return "--";
+  if (rawSeconds === null || rawSeconds === undefined || rawSeconds === "--") return "--";
+  
   const seconds = Number(rawSeconds);
-  if (Number.isNaN(seconds) || seconds <= 0) return "--";
+  if (!Number.isFinite(seconds) || seconds <= 0) return "--";
 
   const minutes = seconds / 60;
   if (minutes >= 60) {
     const hours = minutes / 60;
     return `${hours.toFixed(1)}h`;
   }
-  return `${minutes.toFixed(1)}m`;
+  return `${Math.round(minutes)}m`;
 }
 
-// Extract numeric rating from "😊 86" => 86
-function parseRating(value) {
-  if (typeof value !== "string") return null;
-  const match = value.match(/(\d+(\.\d+)?)/);
-  if (!match) return null;
-  return parseFloat(match[1]);
+// Enhanced agent mapping with better data validation
+function mapAgent(agent) {
+  const u = agent.processingUser || {};
+  const m = agent;
+
+  // Validate agent data
+  if (!u.email && (!u.firstName || !u.lastName)) {
+    return null; // Skip invalid agents
+  }
+
+  const avgRatingStr = m.averageRating?.value || "--";
+  let ratingScore = null;
+  
+  if (typeof avgRatingStr === "string" && avgRatingStr !== "--") {
+    const match = avgRatingStr.match(/(\d+(\.\d+)?)/);
+    ratingScore = match ? parseFloat(match[1]) : null;
+  }
+
+  const agentData = {
+    agent_name:
+      u.firstName && u.lastName
+        ? `${u.firstName} ${u.lastName}`
+        : u.email || "Unknown",
+    agent_email: u.email || "",
+    profile_image: u.profileImageUrl || "",
+
+    total_tickets: m.totalCountForUser?.value ?? 0,
+    closed_tickets: m.rawClosed?.value ?? 0,
+
+    median_reply_time: formatDuration(m.medianReplyTime?.rawValue),
+    median_reply_seconds: m.medianReplyTime?.rawValue || 0,
+    
+    median_first_reply: formatDuration(m.medianTimeToFirstReplyInSec?.rawValue),
+    median_first_reply_seconds: m.medianTimeToFirstReplyInSec?.rawValue || 0,
+    
+    median_assignment_reply: 
+      m.medianFirstAssignmentReplyTime?.value === "--"
+        ? "--"
+        : formatDuration(m.medianFirstAssignmentReplyTime?.rawValue),
+    median_assignment_reply_seconds: m.medianFirstAssignmentReplyTime?.rawValue || 0,
+    
+    time_to_last_close: formatDuration(m.timeToLastCloseInSec?.rawValue),
+    time_to_last_close_seconds: m.timeToLastCloseInSec?.rawValue || 0,
+
+    average_rating: avgRatingStr,
+    rating_score: ratingScore,
+    ticket_activity: m.ticketActivityCount?.value ?? 0,
+    hours_active: m.hoursActive?.value || "--"
+  };
+
+  // Additional validation - skip agents with no activity
+  if (agentData.total_tickets === 0 && agentData.ticket_activity === 0) {
+    return null;
+  }
+
+  return agentData;
+}
+
+// Calculate additional metrics for summary
+function calculateEnhancedMetrics(agents) {
+  const validAgents = agents.filter(agent => agent !== null);
+  
+  const totalTickets = validAgents.reduce((sum, a) => sum + (Number(a.total_tickets) || 0), 0);
+  const totalAgents = validAgents.length;
+  
+  // Calculate average rating
+  const ratings = validAgents
+    .map(a => a.rating_score)
+    .filter(v => typeof v === "number" && !Number.isNaN(v) && v > 0);
+  const avgRating = ratings.length > 0 ? ratings.reduce((sum, v) => sum + v, 0) / ratings.length : 0;
+
+  // Calculate average response time
+  const replyTimes = validAgents
+    .map(a => a.median_reply_seconds)
+    .filter(v => v > 0);
+  const avgResponseTime = replyTimes.length > 0 ? replyTimes.reduce((sum, v) => sum + v, 0) / replyTimes.length : 0;
+
+  return {
+    total_agents: totalAgents,
+    total_tickets: totalTickets,
+    avg_rating: avgRating,
+    avg_response_time: formatDuration(avgResponseTime)
+  };
 }
 
 export default async function handler(req, res) {
@@ -28,9 +105,21 @@ export default async function handler(req, res) {
     const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
-      return res.status(400).json({
-        error: "startDate and endDate are required in UTC ISO format",
-      });
+      return res
+        .status(400)
+        .json({ error: "startDate and endDate query params are required" });
+    }
+
+    // Validate date parameters
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Invalid date format" });
+    }
+
+    if (start >= end) {
+      return res.status(400).json({ error: "Start date must be before end date" });
     }
 
     const url =
@@ -46,104 +135,49 @@ export default async function handler(req, res) {
       headers: {
         Authorization:
           "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE",
-        project: "64d9fa1b014ae7130f2e58d1",
+        project: "64d9fa1b014ae7130f2e58d1"
       },
+      timeout: 25000
     });
 
     if (!response.ok) {
       const text = await response.text();
-      console.error("Gleap error:", response.status, text);
-      return res.status(response.status).json({
+      console.error("Gleap API error:", response.status, text);
+      return res.status(500).json({
         error: "Gleap API error",
         status: response.status,
-        body: text,
+        body: text
       });
     }
 
     const raw = await response.json();
-    const list = Array.isArray(raw?.data) ? raw.data : [];
+    const arr = raw?.data || raw?.list || [];
 
-    // Map and filter out "Unknown" / no-user rows
-    const agents = list
-      .map((item) => {
-        const user = item.processingUser || {};
-        const hasIdentity =
-          !!user.email || !!user.firstName || !!user.lastName;
+    // Map and filter agents
+    const agents = (Array.isArray(arr) ? arr.map(mapAgent) : [])
+      .filter(agent => agent !== null)
+      .filter(agent => agent.agent_name !== "Unknown")
+      .filter(agent => agent.total_tickets > 0);
 
-        if (!hasIdentity) return null; // skip "Unknown" rows
-
-        const agentName =
-          (user.firstName || "") + " " + (user.lastName || "");
-        const trimmedName = agentName.trim() || user.email || "Unknown";
-
-        const totalTickets = item.totalCountForUser?.value || 0;
-
-        const medianReplyTime = formatDuration(
-          item.medianReplyTime?.rawValue ?? null
-        );
-        const medianFirstReply = formatDuration(
-          item.medianTimeToFirstReplyInSec?.rawValue ?? null
-        );
-        const medianAssignmentReply = formatDuration(
-          item.medianFirstAssignmentReplyTime?.rawValue ?? null
-        );
-        const timeToLastClose = formatDuration(
-          item.timeToLastCloseInSec?.rawValue ?? null
-        );
-
-        const averageRatingStr = item.averageRating?.value || "--";
-        const ratingNumeric = parseRating(averageRatingStr);
-
-        return {
-          agent_name: trimmedName,
-          agent_email: user.email || "",
-          profile_image: user.profileImageUrl || "",
-          total_tickets: totalTickets,
-          closed_tickets: item.rawClosed?.value || 0,
-          median_reply_time: medianReplyTime,
-          median_first_reply: medianFirstReply,
-          median_assignment_reply: medianAssignmentReply,
-          time_to_last_close: timeToLastClose,
-          average_rating: averageRatingStr,
-          rating_numeric: ratingNumeric,
-          ticket_activity: item.ticketActivityCount?.value || 0,
-          hours_active: item.hoursActive?.value || "--",
-        };
-      })
-      .filter((a) => a !== null);
-
-    // Totals
-    const totalAgents = agents.length;
-    const totalTickets = agents.reduce(
-      (sum, a) => sum + (a.total_tickets || 0),
-      0
-    );
-
-    const ratingValues = agents
-      .map((a) => a.rating_numeric)
-      .filter((n) => typeof n === "number");
-    const avgRating =
-      ratingValues.length > 0
-        ? ratingValues.reduce((s, n) => s + n, 0) / ratingValues.length
-        : 0;
+    // Calculate enhanced metrics
+    const totals = calculateEnhancedMetrics(agents);
 
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(200).json({
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    
+    return res.status(200).json({
       startDate,
       endDate,
-      totals: {
-        total_agents: totalAgents,
-        total_tickets: totalTickets,
-        avg_rating: avgRating,
-      },
-      agents,
+      totals,
+      agents
     });
   } catch (err) {
     console.error("team-performance API error:", err);
+    
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to fetch team performance",
-      details: err.message,
+      details: err.message
     });
   }
 }
