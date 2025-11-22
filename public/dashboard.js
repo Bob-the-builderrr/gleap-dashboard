@@ -1,6 +1,6 @@
-/* ---------------------------
-   TAB SWITCHING
----------------------------- */
+/* ============================
+   TAB SWITCHING FUNCTION
+============================ */
 function showTab(name) {
   document.getElementById("allTab").style.display =
     name === "all" ? "block" : "none";
@@ -16,27 +16,24 @@ function showTab(name) {
     .classList.add("active");
 }
 
-/* ---------------------------
-   LOAD ALL TICKETS
----------------------------- */
-async function loadAll() {
+/* ============================
+   LOAD ALL LIVE TICKETS
+============================ */
+async function loadAllTickets() {
   const res = await fetch("https://gleap-dashboard.vercel.app/api/agents");
   const data = await res.json();
 
   const valid = data.filter(r => r.ticket_id && r.ticket_id !== "-");
 
-  const totalTickets = valid.reduce(
-    (sum, r) => sum + Number(r.agent_open_ticket || 0),
-    0
-  );
+  /* ---- Update TOTAL tickets ---- */
+  let total = valid.length;
+  document.getElementById("totalTickets").innerText = total;
 
-  document.getElementById("totalTickets").innerText = totalTickets;
-
+  /* ---- Plan breakdown ---- */
   const plan = {};
   valid.forEach(r => {
     const key = r.plan_type || "UNKNOWN_PLAN";
-    const count = Number(r.agent_open_ticket || 0);
-    plan[key] = (plan[key] || 0) + count;
+    plan[key] = (plan[key] || 0) + 1;
   });
 
   const planDiv = document.getElementById("planBreakdown");
@@ -45,6 +42,7 @@ async function loadAll() {
     planDiv.innerHTML += `<p>${k}: ${v}</p>`;
   });
 
+  /* ---- Fill Table ---- */
   const tbody = document.getElementById("ticketRows");
   tbody.innerHTML = "";
 
@@ -64,9 +62,9 @@ async function loadAll() {
   });
 }
 
-/* ---------------------------
+/* ============================
    LOAD ARCHIVED TICKETS
----------------------------- */
+============================ */
 async function loadArchived() {
   const res = await fetch(
     "https://dashapi.gleap.io/v3/tickets?skip=0&limit=200&archived=true&type[]=INQUIRY&ignoreArchived=true&isSpam=false&sort=-lastNotification",
@@ -88,7 +86,8 @@ async function loadArchived() {
   tickets.forEach(t => {
     const agent = t.processingUser || {};
     const fullName =
-      `${agent.firstName || ""} ${agent.lastName || ""}`.trim() || agent.email;
+      `${agent.firstName || ""} ${agent.lastName || ""}`.trim() ||
+      agent.email;
 
     const d = new Date(t.archivedAt);
     const dateIST = d.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata" });
@@ -109,8 +108,8 @@ async function loadArchived() {
   });
 }
 
-/* ---------------------------
+/* ============================
    INITIAL LOAD
----------------------------- */
-loadAll();
+============================ */
+loadAllTickets();
 loadArchived();
