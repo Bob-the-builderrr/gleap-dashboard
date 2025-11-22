@@ -77,6 +77,17 @@ function parseIstInput(value, isEndOfDay) {
     throw new Error("Invalid time format.");
   }
 
+  // If the user's machine is actually set to IST, we can lean on the native Date
+  // to avoid manual offset math. Otherwise, fall back to explicit IST→UTC math.
+  const isLocalIst =
+    typeof Intl !== "undefined" &&
+    Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Kolkata";
+
+  if (isLocalIst) {
+    const localDate = new Date(year, month - 1, day, hour, minute, second);
+    return localDate.toISOString();
+  }
+
   // Build a UTC date from IST components by subtracting the IST offset
   const istAsUtc = Date.UTC(year, month - 1, day, hour, minute, second);
   const utcMs = istAsUtc - IST_OFFSET_MIN * 60 * 1000;
