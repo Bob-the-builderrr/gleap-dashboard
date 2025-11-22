@@ -184,7 +184,6 @@ function renderTable() {
   sorted.forEach((agent) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td class="number">${agent.ticket_activity ?? 0}</td>
       <td>
         <div class="agent">
           <div class="avatar ${agent.profile_image ? "" : "placeholder"}">
@@ -200,6 +199,7 @@ function renderTable() {
           </div>
         </div>
       </td>
+      <td class="number">${agent.ticket_activity ?? 0}</td>
       <td class="number">${agent.closed_tickets ?? 0}</td>
       <td><span class="chip time">${agent.median_reply_time}</span></td>
       <td><span class="chip time">${agent.median_first_reply}</span></td>
@@ -314,8 +314,8 @@ function exportToCsv() {
   }
 
   const headers = [
-    "Ticket Worked",
     "Agent",
+    "Ticket Worked",
     "Email",
     "Closed",
     "Median Reply",
@@ -328,8 +328,8 @@ function exportToCsv() {
   ];
 
   const rows = agentsData.map((a) => [
-    a.ticket_activity,
     a.agent_name,
+    a.ticket_activity,
     a.agent_email,
     a.closed_tickets,
     a.median_reply_time,
