@@ -1,72 +1,145 @@
-import fetch from "node-fetch";
+import fetch from 'node-fetch';
 
+// Convert seconds to hours and minutes
 function formatTime(seconds) {
-  if (!seconds || seconds === "--" || seconds === null || seconds === 0) return "--";
-  const mins = Math.round(seconds / 60);
-  const hours = Math.floor(mins / 60);
-  const remainingMinutes = mins % 60;
-  if (hours > 0 && remainingMinutes > 0) return `${hours}h ${remainingMinutes}m`;
-  if (hours > 0) return `${hours}h`;
-  return `${mins}m`;
+    if (!seconds || seconds === '--' || seconds === null || seconds === 0) return '--';
+    
+    const secs = Number(seconds);
+    if (isNaN(secs)) return '--';
+    
+    const minutes = Math.round(secs / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (hours > 0) {
+        const decimalHours = (minutes / 60).toFixed(1);
+        return `${decimalHours}h`;
+    }
+    if (minutes > 0) {
+        return `${minutes}m`;
+    }
+    return `${secs}s`;
 }
 
-function toUTC(dateString) {
-  const date = new Date(dateString);
-  return date.toISOString();
+// Extract numeric rating from string like "😊 86"
+function extractRating(ratingStr) {
+    if (!ratingStr || ratingStr === '--') return '--';
+    const match = ratingStr.match(/\d+/);
+    return match ? `${match[0]}%` : '--';
+}
+
+// Convert time to minutes for sorting
+function timeToMinutes(timeStr) {
+    if (!timeStr || timeStr === '--') return null;
+    
+    if (timeStr.includes('h')) {
+        const hours = parseFloat(timeStr);
+        return Math.round(hours * 60);
+    }
+    if (timeStr.includes('m')) {
+        return parseInt(timeStr);
+    }
+    if (timeStr.includes('s')) {
+        return Math.round(parseInt(timeStr) / 60);
+    }
+    return null;
 }
 
 export default async function handler(req, res) {
-  try {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate)
-      return res.status(400).json({ error: "Start date and end date are required" });
+    try {
+        const { startDate, startTime, endDate, endTime } = req.query;
+        
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'Start date and end date are required' });
+        }
 
-    const startUTC = toUTC(startDate);
-    const endUTC = toUTC(endDate);
+        console.log(`Fetching team performance for: ${startDate} ${startTime} to ${endDate} ${endTime}`);
 
-    const url = `https://dashapi.gleap.io/v3/statistics/lists?chartType=TEAM_PERFORMANCE_LIST&startDate=${startUTC}&endDate=${endUTC}&useWorkingHours=false&team=66595e93b58fb2a1e6b8a83f&aggsType=MEDIAN`;
+        // Convert to UTC timestamps
+        const startUTC = new Date(`${startDate}T${startTime || '00:00'}:00.000Z`).toISOString();
+        const endUTC = new Date(`${endDate}T${endTime || '23:59'}:59.999Z`).toISOString();
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization:
-          "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE",
-        project: "64d9fa1b014ae7130f2e58d1",
-      },
-    });
+        console.log('UTC Timestamps - Start:', startUTC, 'End:', endUTC);
 
-    const raw = await response.json();
-    const arr = raw?.data || raw?.list || [];
+        const teamId = '66595e93b58fb2a1e6b8a83f';
+        const apiUrl = `https://dashapi.gleap.io/v3/statistics/lists?chartType=TEAM_PERFORMANCE_LIST&startDate=${startUTC}&endDate=${endUTC}&useWorkingHours=false&team=${teamId}&aggsType=MEDIAN`;
 
-    const agents = arr.map((a) => {
-      const u = a.processingUser || {};
-      const m = a;
-      return {
-        name: u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email || "Unknown",
-        tickets: m.totalCountForUser?.value || 0,
-        comments: m.commentCount?.value || 0,
-        closed: m.rawClosed?.value || 0,
-        median_reply: formatTime(m.medianReplyTime?.rawValue),
-        first_reply: formatTime(m.medianTimeToFirstReplyInSec?.rawValue),
-        assign_reply: formatTime(m.medianFirstAssignmentReplyTime?.rawValue),
-        last_close: formatTime(m.timeToLastCloseInSec?.rawValue),
-        rating: m.averageRating?.value || "--",
-        activity: m.ticketActivityCount?.value || 0,
-        hours_active: m.hoursActive?.value || "--",
-      };
-    });
+        const response = await fetch(apiUrl, {
+            headers: {
+                'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE',
+                'project': '64d9fa1b014ae7130f2e58d1'
+            }
+        });
 
-    const totals = {
-      totalAgents: agents.length,
-      totalTickets: agents.reduce((a, b) => a + b.tickets, 0),
-      avgRating:
-        agents.filter((a) => a.rating !== "--").reduce((a, b) => a + Number(b.rating || 0), 0) /
-        (agents.filter((a) => a.rating !== "--").length || 1),
-    };
+        if (!response.ok) {
+            throw new Error(`Gleap API responded with status: ${response.status}`);
+        }
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(200).json({ totals, agents });
-  } catch (err) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(500).json({ error: "Failed to fetch team performance", details: err.message });
-  }
+        const data = await response.json();
+        const teamData = data.data || [];
+
+        // Process the team data
+        const processedData = teamData.map(agent => {
+            const user = agent.processingUser || {};
+            const metrics = agent;
+            
+            const medianReplyTimeDisplay = formatTime(metrics.medianReplyTime?.rawValue);
+            const responseMinutes = timeToMinutes(medianReplyTimeDisplay);
+            
+            return {
+                agent_name: user.firstName && user.lastName 
+                    ? `${user.firstName} ${user.lastName}`.trim()
+                    : user.email || 'Unknown Agent',
+                agent_email: user.email || '',
+                profile_image: user.profileImageUrl || '',
+                
+                // Core metrics
+                total_tickets: metrics.totalCountForUser?.value || 0,
+                closed_tickets: metrics.rawClosed?.value || 0,
+                
+                // Response times
+                median_reply_time_display: medianReplyTimeDisplay,
+                response_minutes: responseMinutes,
+                median_first_reply: formatTime(metrics.medianTimeToFirstReplyInSec?.rawValue),
+                time_to_last_close: formatTime(metrics.timeToLastCloseInSec?.rawValue),
+                
+                // Rating and activity
+                average_rating: metrics.averageRating?.value || '--',
+                rating_display: extractRating(metrics.averageRating?.value),
+                ticket_activity: metrics.ticketActivityCount?.value || 0,
+                hours_active: metrics.hoursActive?.value || '--'
+            };
+        });
+
+        // Sort by total tickets (descending) by default
+        processedData.sort((a, b) => b.total_tickets - a.total_tickets);
+
+        const result = {
+            date_range: { 
+                start: startDate, 
+                end: endDate,
+                start_time: startTime || '00:00',
+                end_time: endTime || '23:59',
+                start_utc: startUTC,
+                end_utc: endUTC
+            },
+            total_agents: processedData.length,
+            agents: processedData,
+            timestamp: new Date().toISOString()
+        };
+
+        console.log(`Processed ${processedData.length} agents`);
+
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', 'application/json');
+        res.status(200).json(result);
+
+    } catch (error) {
+        console.error('Error in team-performance API:', error);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.status(500).json({ 
+            error: 'Failed to fetch team performance',
+            details: error.message
+        });
+    }
 }
