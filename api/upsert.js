@@ -1,7 +1,11 @@
 import { createClient } from "@libsql/client";
 
 export const config = {
-  api: { bodyParser: { sizeLimit: "10mb" } }
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb"
+    }
+  }
 };
 
 const turso = createClient({
@@ -18,52 +22,47 @@ export default async function handler(req, res) {
     const rows = req.body?.rows;
 
     if (!rows || !Array.isArray(rows)) {
-      return res.status(400).json({ error: "Rows missing or invalid" });
+      return res.status(400).json({ error: "Invalid or missing rows" });
     }
 
     for (const r of rows) {
       await turso.execute({
         sql: `
           INSERT INTO open_tickets (
-            Ticket_ID, Agent_Name, Ticket_Status, Ticket_Type, Priority,
-            Plan_Type, User_Email, User_Name, Updated_At, SLA_Breached,
-            Has_Agent_Reply, Tags, Latest_Comment_Created_At,
-            Time_Open_Duration, Agent_Open_Ticket, refreshed_at
+            id, ticket_id, agent_name, agent_id, ticket_status, ticket_type,
+            priority, plan_type, user_email, user_name, updated_at,
+            sla_breached, has_agent_reply, tags, latest_comment_created_at,
+            time_open_duration, agent_open_ticket, refreshed_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-          ON CONFLICT (Ticket_ID) DO UPDATE SET
-            Agent_Name = excluded.Agent_Name,
-            Ticket_Status = excluded.Ticket_Status,
-            Ticket_Type = excluded.Ticket_Type,
-            Priority = excluded.Priority,
-            Plan_Type = excluded.Plan_Type,
-            User_Email = excluded.User_Email,
-            User_Name = excluded.User_Name,
-            Updated_At = excluded.Updated_At,
-            SLA_Breached = excluded.SLA_Breached,
-            Has_Agent_Reply = excluded.Has_Agent_Reply,
-            Tags = excluded.Tags,
-            Latest_Comment_Created_At = excluded.Latest_Comment_Created_At,
-            Time_Open_Duration = excluded.Time_Open_Duration,
-            Agent_Open_Ticket = excluded.Agent_Open_Ticket,
+          VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            ticket_id = excluded.ticket_id,
+            agent_name = excluded.agent_name,
+            agent_id = excluded.agent_id,
+            ticket_status = excluded.ticket_status,
+            ticket_type = excluded.ticket_type,
+            priority = excluded.priority,
+            plan_type = excluded.plan_type,
+            user_email = excluded.user_email,
+            user_name = excluded.user_name,
+            updated_at = excluded.updated_at,
+            sla_breached = excluded.sla_breached,
+            has_agent_reply = excluded.has_agent_reply,
+            tags = excluded.tags,
+            latest_comment_created_at = excluded.latest_comment_created_at,
+            time_open_duration = excluded.time_open_duration,
+            agent_open_ticket = excluded.agent_open_ticket,
             refreshed_at = datetime('now');
         `,
         args: [
-          r.Ticket_ID,
-          r.Agent_Name,
-          r.Ticket_Status,
-          r.Ticket_Type,
-          r.Priority,
-          r.Plan_Type,
-          r.User_Email,
-          r.User_Name,
-          r.Updated_At,
-          r.SLA_Breached,
-          r.Has_Agent_Reply,
-          r.Tags,
-          r.Latest_Comment_Created_At,
-          r.Time_Open_Duration,
-          r.Agent_Open_Ticket
+          r.id, r.ticket_id, r.agent_name, r.agent_id,
+          r.ticket_status, r.ticket_type, r.priority,
+          r.plan_type, r.user_email, r.user_name,
+          r.updated_at, r.sla_breached, r.has_agent_reply,
+          r.tags, r.latest_comment_created_at,
+          r.time_open_duration, r.agent_open_ticket
         ]
       });
     }
@@ -71,7 +70,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, updated: rows.length });
 
   } catch (err) {
-    console.error("UPSERT ERROR:", err);
+    console.error("INSERT ERROR:", err);
     return res.status(500).json({ error: "Upsert failed", details: String(err) });
   }
 }
