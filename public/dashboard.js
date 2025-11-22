@@ -148,6 +148,22 @@ function ratingClass(score) {
   return "bad";
 }
 
+function formatLastSeen(iso) {
+  if (!iso) return { date: "--", time: "--" };
+  const dateObj = new Date(iso);
+  if (Number.isNaN(dateObj.getTime())) return { date: "--", time: "--" };
+  const date = dateObj.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const time = dateObj.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return { date, time };
+}
+
 function renderTable() {
   const tbody = dom.tableBody;
   tbody.innerHTML = "";
@@ -183,6 +199,7 @@ function renderTable() {
 
   sorted.forEach((agent) => {
     const row = document.createElement("tr");
+    const lastSeen = formatLastSeen(agent.last_seen_iso);
     row.innerHTML = `
       <td>
         <div class="agent">
@@ -203,11 +220,11 @@ function renderTable() {
       <td class="number">${agent.closed_tickets ?? 0}</td>
       <td><span class="chip time">${agent.median_reply_time}</span></td>
       <td><span class="chip time">${agent.median_first_reply}</span></td>
-      <td><span class="chip time">${agent.median_assignment_reply}</span></td>
-      <td><span class="chip time">${agent.time_to_last_close}</span></td>
       <td><span class="chip rating ${ratingClass(
         agent.rating_score
       )}">${agent.average_rating || "--"}</span></td>
+      <td>${lastSeen.date}</td>
+      <td>${lastSeen.time}</td>
       <td>${agent.hours_active || "--"}</td>
     `;
     tbody.appendChild(row);
@@ -221,6 +238,10 @@ function getSortValue(agent, key) {
   if (key === "hours_active") {
     const numeric = parseFloat(String(agent.hours_active).replace("h", ""));
     return Number.isFinite(numeric) ? numeric : 0;
+  }
+  if (key === "last_seen_iso") {
+    const ts = new Date(agent.last_seen_iso || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
   }
   return agent[key] ?? 0;
 }
@@ -236,6 +257,8 @@ function updateSortIndicators() {
     }
   });
 }
+
+
 
 function updateSummaryCards(totals, totalAgents) {
   const totalTickets = Number(totals?.total_tickets);
@@ -253,7 +276,7 @@ function updateSummaryCards(totals, totalAgents) {
 
 function updateLastUpdated() {
   const now = new Date();
-  dom.lastUpdated.textContent = `• Updated ${now.toLocaleTimeString()}`;
+  dom.lastUpdated.textContent = `ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Updated ${now.toLocaleTimeString()}`;
 }
 
 async function fetchData(startIso, endIso) {
@@ -297,7 +320,7 @@ async function fetchData(startIso, endIso) {
 function formatDateRange(startIso, endIso) {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleDateString()} → ${end.toLocaleDateString()}`;
+  return `${start.toLocaleDateString()} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${end.toLocaleDateString()}`;
 }
 
 function handleQuickRange(hours) {
@@ -320,10 +343,9 @@ function exportToCsv() {
     "Closed",
     "Median Reply",
     "First Reply",
-    "Assign Reply",
-    "Time To Last Close",
     "Rating",
-    "Ticket Worked",
+    "Last Seen Date",
+    "Last Seen Time",
     "Hours Active",
   ];
 
@@ -334,10 +356,9 @@ function exportToCsv() {
     a.closed_tickets,
     a.median_reply_time,
     a.median_first_reply,
-    a.median_assignment_reply,
-    a.time_to_last_close,
     a.average_rating,
-    a.ticket_activity,
+    formatLastSeen(a.last_seen_iso).date,
+    formatLastSeen(a.last_seen_iso).time,
     a.hours_active,
   ]);
 

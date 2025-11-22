@@ -120,6 +120,7 @@ function transformAgent(item) {
     agent_name: agentName,
     agent_email: user.email || "",
     profile_image: user.profileImageUrl || "",
+    last_seen_iso: user.lastSeen || null,
 
     total_tickets: item.totalCountForUser?.value ?? 0,
     closed_tickets: item.rawClosed?.value ?? 0,
