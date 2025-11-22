@@ -4,166 +4,122 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Team Performance Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="page">
-    <header class="header">
-      <div class="header-main">
-        <h1>Team Performance</h1>
-        <div class="header-controls">
-          <button id="exportBtn" class="secondary-btn" title="Export to CSV">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Export
-          </button>
-          <div class="auto-refresh">
-            <label class="toggle">
-              <input type="checkbox" id="autoRefresh">
-              <span class="toggle-slider"></span>
-            </label>
-            <span class="toggle-label">Auto Refresh (5 min)</span>
-          </div>
-        </div>
+  <div class="backdrop">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
+  <main class="shell">
+    <header class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Support Ops · Live Gleap metrics</p>
+        <h1>Team Performance Dashboard</h1>
+        <p class="lede">
+          IST selections are converted to UTC before hitting Gleap.
+          <span id="lastUpdated" class="muted-text"></span>
+        </p>
       </div>
-      <p class="subtitle">
-        Gleap support metrics in IST, converted to UTC behind the scenes.
-        <span id="lastUpdated" class="last-updated"></span>
-      </p>
+      <div class="hero-actions">
+        <span class="pill">IST → UTC</span>
+        <label class="switch">
+          <input type="checkbox" id="autoRefresh" />
+          <span class="slider"></span>
+          <span class="switch-label">Auto refresh (5m)</span>
+        </label>
+        <button id="exportBtn" class="ghost-btn" type="button">Export CSV</button>
+      </div>
     </header>
 
-    <section class="filters">
-      <div class="filters-left">
-        <div class="field">
-          <label>Start date</label>
-          <input type="date" id="startDate" />
-        </div>
-        <div class="field">
-          <label>Start time (optional)</label>
-          <input type="time" id="startTime" />
-        </div>
-        <div class="field">
-          <label>End date</label>
-          <input type="date" id="endDate" />
-        </div>
-        <div class="field">
-          <label>End time (optional)</label>
-          <input type="time" id="endTime" />
-        </div>
+    <section class="panel controls">
+      <div class="control-group">
+        <label for="startInput">Start (IST)</label>
+        <input type="datetime-local" id="startInput" />
       </div>
-      <div class="filters-right">
-        <div class="action-buttons">
-          <button id="fetchBtn" class="primary-btn">
-            <span class="btn-content">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-              </svg>
-              Fetch Data
-            </span>
-          </button>
-          <button id="clearBtn" class="secondary-btn">Clear</button>
-        </div>
-        <div class="quick-buttons">
-          <button data-hours="1" title="Shortcut: 1">Last 1 Hour</button>
-          <button data-hours="2" title="Shortcut: 2">Last 2 Hours</button>
-          <button data-hours="4" title="Shortcut: 4">Last 4 Hours</button>
-          <button data-hours="24" title="Shortcut: 8">Last 24 Hours</button>
+      <div class="control-group">
+        <label for="endInput">End (IST)</label>
+        <input type="datetime-local" id="endInput" />
+      </div>
+      <button id="fetchBtn" class="primary-btn" type="button">
+        <span class="btn-label">Fetch Data</span>
+        <span id="fetchBtnSpinner" class="btn-progress"></span>
+      </button>
+      <div class="quick-buttons">
+        <span class="quick-label muted-text">Quick ranges</span>
+        <div class="quick-actions">
+          <button type="button" data-hours="1">Last 1 Hour</button>
+          <button type="button" data-hours="2">Last 2 Hours</button>
+          <button type="button" data-hours="4">Last 4 Hours</button>
+          <button type="button" data-hours="24">Last 24 Hours</button>
         </div>
       </div>
     </section>
 
-    <section class="summary">
-      <div class="card" id="totalTicketsCard">
-        <div class="card-label">Total Tickets</div>
-        <div class="card-value" id="totalTicketsValue">--</div>
-        <div class="card-trend" id="totalTicketsTrend"></div>
-      </div>
-      <div class="card" id="averageRatingCard">
-        <div class="card-label">Average Rating</div>
-        <div class="card-value" id="averageRatingValue">--</div>
-        <div class="card-trend" id="averageRatingTrend"></div>
-      </div>
-      <div class="card" id="totalAgentsCard">
-        <div class="card-label">Active Agents</div>
-        <div class="card-value" id="totalAgentsValue">--</div>
-        <div class="card-trend" id="totalAgentsTrend"></div>
-      </div>
-      <div class="card" id="responseTimeCard">
-        <div class="card-label">Avg Response Time</div>
-        <div class="card-value" id="responseTimeValue">--</div>
-        <div class="card-trend" id="responseTimeTrend"></div>
-      </div>
+    <div id="errorBanner" class="alert hidden"></div>
+
+    <section class="summary-grid">
+      <article class="card">
+        <p class="card-label">Total Tickets</p>
+        <p class="card-value" id="totalTicketsValue">--</p>
+        <p class="card-sub muted-text">Across the selected range</p>
+      </article>
+      <article class="card">
+        <p class="card-label">Average Rating</p>
+        <p class="card-value" id="averageRatingValue">--</p>
+        <p class="card-sub muted-text">Emoji stripped numeric score</p>
+      </article>
+      <article class="card">
+        <p class="card-label">Active Agents</p>
+        <p class="card-value" id="totalAgentsValue">--</p>
+        <p class="card-sub muted-text">Unknown agents are filtered out</p>
+      </article>
     </section>
 
-    <section class="table-section">
-      <div class="table-header">
+    <section class="panel table-card">
+      <div class="table-head">
         <div>
-          <h2>Agent Level Performance</h2>
-          <p class="table-caption">
-            Click on column headers to sort. Showing <span id="visibleAgentsCount">0</span> active agents.
+          <h2>Agent Performance</h2>
+          <p class="caption muted-text">
+            Sorted by total tickets. Showing <span id="visibleAgentsCount">0</span> agents.
           </p>
         </div>
-        <div class="table-controls">
-          <div class="search-field">
-            <input type="text" id="agentSearch" placeholder="Search agents..." />
-          </div>
+        <div class="table-tools">
+          <input id="agentSearch" type="search" placeholder="Search name or email" />
         </div>
       </div>
       <div class="table-wrapper">
-        <table id="resultTable">
+        <table>
           <thead>
             <tr>
-              <th data-sort="agent_name" class="sortable">Agent</th>
-              <th data-sort="total_tickets" class="sortable active">
-                Total Tickets <span class="sort-indicator">↓</span>
-              </th>
+              <th>Agent</th>
+              <th data-sort="total_tickets" class="sortable">Total Tickets <span class="sort-indicator">↓</span></th>
               <th data-sort="closed_tickets" class="sortable">Closed</th>
               <th data-sort="median_reply_seconds" class="sortable">Median Reply</th>
               <th data-sort="median_first_reply_seconds" class="sortable">First Reply</th>
               <th data-sort="median_assignment_reply_seconds" class="sortable">Assign Reply</th>
-              <th data-sort="time_to_last_close_seconds" class="sortable">Last Close</th>
+              <th data-sort="time_to_last_close_seconds" class="sortable">Time To Last Close</th>
               <th data-sort="rating_score" class="sortable">Rating</th>
-              <th data-sort="ticket_activity" class="sortable">Activity</th>
+              <th data-sort="ticket_activity" class="sortable">Ticket Activity</th>
               <th data-sort="hours_active" class="sortable">Hours Active</th>
             </tr>
           </thead>
           <tbody id="tableBody">
-            <!-- Skeleton loading rows will be inserted here -->
+            <tr><td colspan="10" class="no-data">Fetching data...</td></tr>
           </tbody>
         </table>
       </div>
-      <div class="table-footer">
-        <div class="pagination">
-          <button id="prevPage" class="pagination-btn" disabled>Previous</button>
-          <span class="pagination-info">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
-          <button id="nextPage" class="pagination-btn" disabled>Next</button>
-        </div>
-      </div>
     </section>
+  </main>
 
-    <div class="keyboard-hint">
-      <span>Press 1,2,4,8 for quick time periods • R to refresh</span>
-    </div>
-  </div>
-
-  <!-- Enhanced Loading Overlay -->
   <div id="loadingOverlay" class="loading-overlay hidden">
-    <div class="loading-content">
+    <div class="loader">
       <div class="spinner"></div>
-      <div class="loading-text">Loading team performance metrics...</div>
-      <div class="loading-details" id="loadingDetails"></div>
-    </div>
-  </div>
-
-  <!-- Error Toast -->
-  <div id="errorToast" class="toast hidden">
-    <div class="toast-content">
-      <span class="toast-message" id="toastMessage"></span>
-      <button class="toast-close" onclick="this.parentElement.parentElement.classList.add('hidden')">×</button>
+      <p class="loader-text">Loading metrics...</p>
     </div>
   </div>
 

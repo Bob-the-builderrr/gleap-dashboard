@@ -1,512 +1,423 @@
-const IST_OFFSET_MIN = 330; // +5:30
+const IST_OFFSET_MIN = 330; // +05:30
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 let agentsData = [];
-let filteredAgentsData = [];
-let currentSortKey = "total_tickets";
-let currentSortDir = "desc";
-let currentPage = 1;
-const pageSize = 15;
-let autoRefreshInterval = null;
-let lastFetchParams = null;
+let sortKey = "total_tickets";
+let sortDir = "desc";
+let lastRange = null;
+let autoRefreshTimer = null;
+let isLoading = false;
 
-// Enhanced IST to UTC conversion with validation
-function istToUtcIso(dateStr, timeStr, isEndOfDay) {
-  if (!dateStr) {
-    showError("Date is required");
-    return null;
-  }
+const dom = {
+  startInput: document.getElementById("startInput"),
+  endInput: document.getElementById("endInput"),
+  fetchBtn: document.getElementById("fetchBtn"),
+  errorBanner: document.getElementById("errorBanner"),
+  lastUpdated: document.getElementById("lastUpdated"),
+  tableBody: document.getElementById("tableBody"),
+  agentSearch: document.getElementById("agentSearch"),
+  totalTicketsValue: document.getElementById("totalTicketsValue"),
+  averageRatingValue: document.getElementById("averageRatingValue"),
+  totalAgentsValue: document.getElementById("totalAgentsValue"),
+  visibleAgentsCount: document.getElementById("visibleAgentsCount"),
+  loadingOverlay: document.getElementById("loadingOverlay"),
+  autoRefresh: document.getElementById("autoRefresh"),
+};
 
-  try {
-    const [year, month, day] = dateStr.split("-").map(Number);
-    
-    // Validate date
-    const date = new Date(year, month - 1, day);
-    if (isNaN(date.getTime())) {
-      showError("Invalid date selected");
-      return null;
-    }
-
-    let hours = 0, minutes = 0, seconds = 0, ms = 0;
-
-    if (timeStr) {
-      const [h, m] = timeStr.split(":").map(Number);
-      if (h > 23 || m > 59) {
-        showError("Invalid time format");
-        return null;
-      }
-      hours = h;
-      minutes = m;
-    } else if (isEndOfDay) {
-      hours = 23;
-      minutes = 59;
-      seconds = 59;
-      ms = 999;
-    }
-
-    // Create date in local timezone, then convert to UTC
-    const localDate = new Date(year, month - 1, day, hours, minutes, seconds, ms);
-    const utcMs = localDate.getTime() - (localDate.getTimezoneOffset() + IST_OFFSET_MIN) * 60 * 1000;
-    
-    const result = new Date(utcMs).toISOString();
-    
-    // Validate result isn't in the future for end dates
-    if (isEndOfDay && new Date(result) > new Date()) {
-      return new Date().toISOString();
-    }
-    
-    return result;
-  } catch (error) {
-    console.error("Date conversion error:", error);
-    showError("Date conversion error");
-    return null;
-  }
+function looksLikeIsoWithTz(value) {
+  return /([zZ]|[+-]\d{2}:?\d{2})$/.test(value);
 }
 
-// Enhanced loading with progress
-function showLoading(on, message = "Loading metrics...") {
-  const overlay = document.getElementById("loadingOverlay");
-  const loadingText = document.querySelector(".loading-text");
-  const loadingDetails = document.getElementById("loadingDetails");
-  
-  if (!overlay) return;
-  
-  if (on) {
-    loadingText.textContent = message;
-    loadingDetails.textContent = "Fetching data from Gleap API...";
-    overlay.classList.remove("hidden");
-  } else {
-    overlay.classList.add("hidden");
-    loadingDetails.textContent = "";
-  }
+function toIstInputValue(date) {
+  const istDate = new Date(date.getTime() + IST_OFFSET_MIN * 60000);
+  const y = istDate.getUTCFullYear();
+  const m = String(istDate.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(istDate.getUTCDate()).padStart(2, "0");
+  const h = String(istDate.getUTCHours()).padStart(2, "0");
+  const min = String(istDate.getUTCMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-// Toast notifications
-function showError(message) {
-  const toast = document.getElementById("errorToast");
-  const toastMessage = document.getElementById("toastMessage");
-  
-  toastMessage.textContent = message;
-  toast.classList.remove("hidden");
-  
-  setTimeout(() => {
-    toast.classList.add("hidden");
-  }, 5000);
-}
+function istToUtcIso(datePart, timePart, isEndOfDay) {
+  const [year, month, day] = (datePart || "").split("-").map(Number);
+  if (!year || !month || !day) throw new Error("Invalid date");
 
-function showSuccess(message) {
-  // Could implement success toast similarly
-  console.log("Success:", message);
-}
+  let hours = 0;
+  let minutes = 0;
+  let seconds = 0;
+  let ms = 0;
 
-// Enhanced data fetching with retry logic
-async function fetchData(startIso, endIso, retryCount = 0) {
-  if (!startIso || !endIso) {
-    showError("Invalid date range");
-    return;
-  }
+  if (timePart) {
+    const [h, m = "0", sRaw = "0"] = timePart.split(":");
+    hours = Number(h);
+    minutes = Number(m);
 
-  // Validate date range
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  
-  if (start >= end) {
-    showError("Start date must be before end date");
-    return;
-  }
-  
-  if (end > new Date()) {
-    showError("End date cannot be in the future");
-    return;
-  }
-
-  try {
-    showLoading(true, `Fetching data for ${formatDateRange(startIso, endIso)}`);
-    lastFetchParams = { startIso, endIso };
-    
-    const url = `${window.location.origin}/api/team-performance?startDate=${encodeURIComponent(startIso)}&endDate=${encodeURIComponent(endIso)}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    }
-    
-    const data = await res.json();
-
-    if (!data || data.error) {
-      console.error("API error:", data);
-      throw new Error(data?.error || "Failed to fetch data");
-    }
-
-    // Filter out unknown/invalid agents
-    agentsData = (data.agents || []).filter(agent => 
-      agent.agent_name && 
-      agent.agent_name !== "Unknown" && 
-      agent.total_tickets > 0
-    );
-
-    updateSummary(data.totals || {});
-    updateLastUpdated();
-    applyFilters();
-    
-    showSuccess(`Loaded ${agentsData.length} agents`);
-    
-  } catch (err) {
-    console.error("Fetch error:", err);
-    
-    if (err.name === 'AbortError') {
-      showError("Request timeout - please try again");
-    } else if (retryCount < 2) {
-      showLoading(true, `Retrying... (${retryCount + 1}/3)`);
-      setTimeout(() => fetchData(startIso, endIso, retryCount + 1), 2000);
+    if (String(sRaw).includes(".")) {
+      const [s, msRaw] = String(sRaw).split(".");
+      seconds = Number(s);
+      ms = Number(msRaw.padEnd(3, "0").slice(0, 3));
     } else {
-      showError(err.message || "Failed to load data");
+      seconds = Number(sRaw);
     }
-  } finally {
-    showLoading(false);
+  } else if (isEndOfDay) {
+    hours = 23;
+    minutes = 59;
+    seconds = 59;
+    ms = 999;
+  }
+
+  if (
+    [hours, minutes, seconds, ms].some((v) => Number.isNaN(v)) ||
+    hours > 23 ||
+    minutes > 59 ||
+    seconds > 59
+  ) {
+    throw new Error("Invalid time");
+  }
+
+  const utcMs =
+    Date.UTC(year, month - 1, day, hours, minutes, seconds, ms) -
+    IST_OFFSET_MIN * 60 * 1000;
+  return new Date(utcMs).toISOString();
+}
+
+function normalizeToUtc(value, isEndOfDay) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) throw new Error("Please select both start and end dates.");
+
+  if (looksLikeIsoWithTz(trimmed)) {
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) throw new Error("Invalid date format.");
+    return parsed.toISOString();
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return istToUtcIso(trimmed, null, isEndOfDay);
+  }
+
+  const [datePart, timePart] = trimmed.split(/[T\s]/).filter(Boolean);
+  return istToUtcIso(datePart, timePart || null, isEndOfDay);
+}
+
+function setInputsForRange(startUtc, endUtc) {
+  dom.startInput.value = toIstInputValue(startUtc);
+  dom.endInput.value = toIstInputValue(endUtc);
+}
+
+function getRangeFromInputs() {
+  try {
+    const startIso = normalizeToUtc(dom.startInput.value, false);
+    const endIso = normalizeToUtc(dom.endInput.value, true);
+
+    if (new Date(startIso) >= new Date(endIso)) {
+      throw new Error("Start time must be before end time.");
+    }
+
+    return { startIso, endIso };
+  } catch (err) {
+    showError(err.message || "Invalid date range");
+    return null;
   }
 }
 
-// Enhanced summary with trends
-function updateSummary(totals) {
-  document.getElementById("totalTicketsValue").textContent = totals.total_tickets ?? "--";
-  const avg = typeof totals.avg_rating === "number" ? totals.avg_rating.toFixed(1) : "--";
-  document.getElementById("averageRatingValue").textContent = avg;
-  document.getElementById("totalAgentsValue").textContent = totals.total_agents ?? "--";
-  document.getElementById("responseTimeValue").textContent = totals.avg_response_time ?? "--";
+function setLoading(state, message = "Loading metrics...") {
+  isLoading = state;
+  dom.fetchBtn.disabled = state;
+  dom.fetchBtn.classList.toggle("is-loading", state);
+  dom.loadingOverlay.classList.toggle("hidden", !state);
+  const loaderText = dom.loadingOverlay.querySelector(".loader-text");
+  if (loaderText) loaderText.textContent = message;
 }
 
-function updateLastUpdated() {
-  const element = document.getElementById("lastUpdated");
-  const now = new Date();
-  element.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+function showError(message) {
+  dom.errorBanner.textContent = message;
+  dom.errorBanner.classList.remove("hidden");
 }
 
-// Enhanced sorting with numeric fallback
-function sortAndRender() {
-  const key = currentSortKey;
-  const dir = currentSortDir === "asc" ? 1 : -1;
-
-  const sorted = [...filteredAgentsData].sort((a, b) => {
-    let va = a[key];
-    let vb = b[key];
-
-    // Handle numeric sorting for numeric keys
-    if (key.includes('_seconds') || ['total_tickets', 'closed_tickets', 'ticket_activity', 'rating_score'].includes(key)) {
-      va = Number(va) || 0;
-      vb = Number(vb) || 0;
-      return (va - vb) * dir;
-    }
-
-    // String sorting
-    if (typeof va === 'string' && typeof vb === 'string') {
-      return va.localeCompare(vb) * dir;
-    }
-
-    return 0;
-  });
-
-  renderTable(sorted);
-  updateSortIndicators();
-  updatePagination();
+function clearError() {
+  dom.errorBanner.classList.add("hidden");
+  dom.errorBanner.textContent = "";
 }
 
-// Enhanced table rendering with pagination
-function renderTable(agents) {
-  const tbody = document.getElementById("tableBody");
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedAgents = agents.slice(startIndex, startIndex + pageSize);
+function ratingClass(score) {
+  if (!Number.isFinite(score)) return "";
+  if (score >= 90) return "good";
+  if (score >= 75) return "";
+  return "bad";
+}
 
+function renderTable() {
+  const tbody = dom.tableBody;
   tbody.innerHTML = "";
 
-  if (paginatedAgents.length === 0) {
+  const searchTerm = dom.agentSearch.value.trim().toLowerCase();
+  const filtered = agentsData.filter((agent) => {
+    const name = (agent.agent_name || "").toLowerCase();
+    const email = (agent.agent_email || "").toLowerCase();
+    return name.includes(searchTerm) || email.includes(searchTerm);
+  });
+
+  const dir = sortDir === "asc" ? 1 : -1;
+  const sorted = [...filtered].sort((a, b) => {
+    const va = getSortValue(a, sortKey);
+    const vb = getSortValue(b, sortKey);
+
+    if (typeof va === "number" && typeof vb === "number") {
+      return (va - vb) * dir;
+    }
+    return String(va).localeCompare(String(vb)) * dir;
+  });
+
+  dom.visibleAgentsCount.textContent = sorted.length;
+
+  if (sorted.length === 0) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="10" class="no-data">No agents found matching your criteria</td>`;
+    row.innerHTML =
+      '<td class="no-data" colspan="10">No data for this range</td>';
     tbody.appendChild(row);
+    updateSortIndicators();
     return;
   }
 
-  paginatedAgents.forEach(a => {
+  sorted.forEach((agent) => {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>
-        <div class="agent-cell">
-          <div class="agent-avatar ${!a.profile_image ? 'default-avatar' : ''}">
-            ${a.profile_image ? `<img src="${a.profile_image}" alt="${a.agent_name}" />` : a.agent_name?.charAt(0) || '?'}
+        <div class="agent">
+          <div class="avatar ${agent.profile_image ? "" : "placeholder"}">
+            ${
+              agent.profile_image
+                ? `<img src="${agent.profile_image}" alt="${agent.agent_name}" loading="lazy" />`
+                : (agent.agent_name || "?").charAt(0)
+            }
           </div>
-          <div class="agent-meta">
-            <span class="agent-name">${a.agent_name}</span>
-            <span class="agent-email">${a.agent_email || ''}</span>
+          <div>
+            <div class="agent-name">${agent.agent_name}</div>
+            <div class="agent-email">${agent.agent_email || ""}</div>
           </div>
         </div>
       </td>
-      <td><span class="metric-value">${a.total_tickets}</span></td>
-      <td><span class="metric-value">${a.closed_tickets}</span></td>
-      <td><span class="time-metric ${getTimeMetricClass(a.median_reply_time)}">${a.median_reply_time}</span></td>
-      <td><span class="time-metric ${getTimeMetricClass(a.median_first_reply)}">${a.median_first_reply}</span></td>
-      <td><span class="time-metric ${getTimeMetricClass(a.median_assignment_reply)}">${a.median_assignment_reply}</span></td>
-      <td><span class="time-metric ${getTimeMetricClass(a.time_to_last_close)}">${a.time_to_last_close}</span></td>
-      <td><span class="rating-metric ${getRatingClass(a.rating_score)}">${a.average_rating}</span></td>
-      <td><span class="activity-metric">${a.ticket_activity}</span></td>
-      <td><span class="hours-metric">${a.hours_active}</span></td>
+      <td class="number">${agent.total_tickets ?? 0}</td>
+      <td class="number">${agent.closed_tickets ?? 0}</td>
+      <td><span class="chip time">${agent.median_reply_time}</span></td>
+      <td><span class="chip time">${agent.median_first_reply}</span></td>
+      <td><span class="chip time">${agent.median_assignment_reply}</span></td>
+      <td><span class="chip time">${agent.time_to_last_close}</span></td>
+      <td><span class="chip rating ${ratingClass(
+        agent.rating_score
+      )}">${agent.average_rating || "--"}</span></td>
+      <td class="number">${agent.ticket_activity ?? 0}</td>
+      <td>${agent.hours_active || "--"}</td>
     `;
     tbody.appendChild(row);
   });
 
-  document.getElementById("visibleAgentsCount").textContent = agents.length;
+  updateSortIndicators();
 }
 
-// Utility functions for metric styling
-function getTimeMetricClass(timeStr) {
-  if (!timeStr || timeStr === '--') return 'time-neutral';
-  const minutes = timeStr.includes('h') ? parseFloat(timeStr) * 60 : parseInt(timeStr);
-  if (minutes < 5) return 'time-excellent';
-  if (minutes < 15) return 'time-good';
-  if (minutes < 30) return 'time-average';
-  return 'time-poor';
-}
-
-function getRatingClass(rating) {
-  if (!rating || rating === '--') return 'rating-neutral';
-  if (rating >= 4.5) return 'rating-excellent';
-  if (rating >= 4.0) return 'rating-good';
-  if (rating >= 3.0) return 'rating-average';
-  return 'rating-poor';
+function getSortValue(agent, key) {
+  if (!agent) return 0;
+  if (key === "hours_active") {
+    const numeric = parseFloat(String(agent.hours_active).replace("h", ""));
+    return Number.isFinite(numeric) ? numeric : 0;
+  }
+  return agent[key] ?? 0;
 }
 
 function updateSortIndicators() {
-  document.querySelectorAll("th.sortable").forEach(th => {
+  document.querySelectorAll("th.sortable").forEach((th) => {
     const key = th.getAttribute("data-sort");
     const indicator = th.querySelector(".sort-indicator");
-    
-    th.classList.remove("active", "asc", "desc");
-    
-    if (key === currentSortKey) {
-      th.classList.add("active", currentSortDir);
-      if (indicator) {
-        indicator.textContent = currentSortDir === "asc" ? "↑" : "↓";
-      }
+    th.classList.toggle("active", key === sortKey);
+    if (indicator) {
+      indicator.textContent =
+        key === sortKey ? (sortDir === "asc" ? "↑" : "↓") : "";
     }
   });
 }
 
-function updatePagination() {
-  const totalPages = Math.ceil(filteredAgentsData.length / pageSize);
-  const currentPageElement = document.getElementById("currentPage");
-  const totalPagesElement = document.getElementById("totalPages");
-  const prevBtn = document.getElementById("prevPage");
-  const nextBtn = document.getElementById("nextPage");
+function updateSummaryCards(totals, totalAgents) {
+  const totalTickets = Number(totals?.total_tickets);
+  dom.totalTicketsValue.textContent = Number.isFinite(totalTickets)
+    ? totalTickets
+    : "--";
 
-  currentPageElement.textContent = currentPage;
-  totalPagesElement.textContent = totalPages;
-  
-  prevBtn.disabled = currentPage === 1;
-  nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+  const avgRating = Number(totals?.avg_rating);
+  dom.averageRatingValue.textContent = Number.isFinite(avgRating)
+    ? avgRating.toFixed(1)
+    : "--";
+  dom.totalAgentsValue.textContent =
+    totalAgents != null ? totalAgents : agentsData.length;
 }
 
-// Enhanced filtering with search
-function applyFilters() {
-  const searchTerm = document.getElementById("agentSearch").value.toLowerCase();
-  
-  filteredAgentsData = agentsData.filter(agent => 
-    agent.agent_name.toLowerCase().includes(searchTerm) ||
-    (agent.agent_email && agent.agent_email.toLowerCase().includes(searchTerm))
-  );
-  
-  currentPage = 1; // Reset to first page when filtering
-  sortAndRender();
+function updateLastUpdated() {
+  const now = new Date();
+  dom.lastUpdated.textContent = `• Updated ${now.toLocaleTimeString()}`;
 }
 
-// Export to CSV functionality
-function exportToCSV() {
-  if (agentsData.length === 0) {
+async function fetchData(startIso, endIso) {
+  if (!startIso || !endIso) return;
+  clearError();
+  setLoading(true, `Fetching ${formatDateRange(startIso, endIso)}`);
+
+  try {
+    const url = `/api/team-performance?startDate=${encodeURIComponent(
+      startIso
+    )}&endDate=${encodeURIComponent(endIso)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.error || "Failed to fetch data");
+    }
+
+    agentsData = Array.isArray(data?.agents)
+      ? data.agents.filter(
+          (a) => a.agent_name && (a.agent_email || a.agent_name !== "Unknown")
+        )
+      : [];
+
+    updateSummaryCards(data?.totals || {}, data?.total_agents);
+    renderTable();
+    updateLastUpdated();
+    lastRange = { startIso, endIso };
+    if (dom.autoRefresh.checked) {
+      setAutoRefresh(true);
+    }
+  } catch (err) {
+    showError(err.message || "Unable to load data");
+    agentsData = [];
+    renderTable();
+  } finally {
+    setLoading(false);
+  }
+}
+
+function formatDateRange(startIso, endIso) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  return `${start.toLocaleDateString()} → ${end.toLocaleDateString()}`;
+}
+
+function handleQuickRange(hours) {
+  const endUtc = new Date();
+  const startUtc = new Date(endUtc.getTime() - hours * 60 * 60 * 1000);
+  setInputsForRange(startUtc, endUtc);
+  fetchData(startUtc.toISOString(), endUtc.toISOString());
+}
+
+function exportToCsv() {
+  if (!agentsData.length) {
     showError("No data to export");
     return;
   }
 
-  const headers = ["Agent", "Email", "Total Tickets", "Closed Tickets", "Median Reply", "First Reply", "Assign Reply", "Last Close", "Rating", "Activity", "Hours Active"];
-  const csvData = agentsData.map(agent => [
-    agent.agent_name,
-    agent.agent_email,
-    agent.total_tickets,
-    agent.closed_tickets,
-    agent.median_reply_time,
-    agent.median_first_reply,
-    agent.median_assignment_reply,
-    agent.time_to_last_close,
-    agent.average_rating,
-    agent.ticket_activity,
-    agent.hours_active
+  const headers = [
+    "Agent",
+    "Email",
+    "Total Tickets",
+    "Closed",
+    "Median Reply",
+    "First Reply",
+    "Assign Reply",
+    "Time To Last Close",
+    "Rating",
+    "Ticket Activity",
+    "Hours Active",
+  ];
+
+  const rows = agentsData.map((a) => [
+    a.agent_name,
+    a.agent_email,
+    a.total_tickets,
+    a.closed_tickets,
+    a.median_reply_time,
+    a.median_first_reply,
+    a.median_assignment_reply,
+    a.time_to_last_close,
+    a.average_rating,
+    a.ticket_activity,
+    a.hours_active,
   ]);
 
-  const csvContent = [
-    headers.join(","),
-    ...csvData.map(row => row.map(field => `"${field}"`).join(","))
-  ].join("\n");
+  const csv = [headers.join(","), ...rows.map((r) => r.map(csvEscape).join(","))]
+    .join("\n")
+    .trim();
 
-  const blob = new Blob([csvContent], { type: "text/csv" });
+  const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `team-performance-${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `team-performance-${new Date()
+    .toISOString()
+    .split("T")[0]}.csv`;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
-  
-  showSuccess("Data exported successfully");
 }
 
-// Auto-refresh functionality
-function setupAutoRefresh() {
-  const toggle = document.getElementById("autoRefresh");
-  
-  toggle.addEventListener("change", (e) => {
-    if (e.target.checked) {
-      autoRefreshInterval = setInterval(() => {
-        if (lastFetchParams) {
-          fetchData(lastFetchParams.startIso, lastFetchParams.endIso);
-        }
-      }, 5 * 60 * 1000); // 5 minutes
-      showSuccess("Auto-refresh enabled");
-    } else {
-      clearInterval(autoRefreshInterval);
-      autoRefreshInterval = null;
-      showSuccess("Auto-refresh disabled");
+function csvEscape(value) {
+  if (value == null) return "";
+  const stringified = String(value).replace(/"/g, '""');
+  return `"${stringified}"`;
+}
+
+function setAutoRefresh(enabled) {
+  clearInterval(autoRefreshTimer);
+  if (enabled && lastRange) {
+    autoRefreshTimer = setInterval(() => {
+      fetchData(lastRange.startIso, lastRange.endIso);
+    }, FIVE_MINUTES_MS);
+  }
+}
+
+function bindEvents() {
+  dom.fetchBtn.addEventListener("click", () => {
+    const range = getRangeFromInputs();
+    if (range) {
+      fetchData(range.startIso, range.endIso);
     }
   });
-}
 
-// Date formatting utility
-function formatDateRange(startIso, endIso) {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  return `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
-}
-
-// Event Listeners
-document.getElementById("fetchBtn").addEventListener("click", () => {
-  const startDate = document.getElementById("startDate").value;
-  const startTime = document.getElementById("startTime").value;
-  const endDate = document.getElementById("endDate").value;
-  const endTime = document.getElementById("endTime").value;
-
-  if (!startDate || !endDate) {
-    showError("Please select both start and end dates");
-    return;
-  }
-
-  const startIso = istToUtcIso(startDate, startTime || "00:00", false);
-  const endIso = istToUtcIso(endDate, endTime || null, true);
-
-  if (startIso && endIso) {
-    fetchData(startIso, endIso);
-  }
-});
-
-document.getElementById("clearBtn").addEventListener("click", () => {
-  document.getElementById("startDate").value = "";
-  document.getElementById("startTime").value = "";
-  document.getElementById("endDate").value = "";
-  document.getElementById("endTime").value = "";
-  document.getElementById("agentSearch").value = "";
-  agentsData = [];
-  filteredAgentsData = [];
-  renderTable([]);
-  updateSummary({});
-});
-
-document.getElementById("exportBtn").addEventListener("click", exportToCSV);
-
-document.getElementById("agentSearch").addEventListener("input", applyFilters);
-
-document.getElementById("prevPage").addEventListener("click", () => {
-  if (currentPage > 1) {
-    currentPage--;
-    sortAndRender();
-  }
-});
-
-document.getElementById("nextPage").addEventListener("click", () => {
-  const totalPages = Math.ceil(filteredAgentsData.length / pageSize);
-  if (currentPage < totalPages) {
-    currentPage++;
-    sortAndRender();
-  }
-});
-
-// Quick buttons
-document.querySelectorAll(".quick-buttons button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const hours = parseInt(btn.dataset.hours, 10);
-    const endUtc = new Date();
-    const startUtc = new Date(endUtc.getTime() - hours * 60 * 60 * 1000);
-
-    fetchData(startUtc.toISOString(), endUtc.toISOString());
+  document.querySelectorAll(".quick-actions button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const hours = Number(btn.dataset.hours);
+      if (!Number.isFinite(hours)) return;
+      handleQuickRange(hours);
+    });
   });
-});
 
-// Enhanced table sorting
-document.querySelectorAll("th[data-sort]").forEach(th => {
-  th.addEventListener("click", () => {
-    const key = th.getAttribute("data-sort");
-    if (!key) return;
-
-    if (currentSortKey === key) {
-      currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
-    } else {
-      currentSortKey = key;
-      currentSortDir = "desc";
-    }
-
-    sortAndRender();
-  });
-});
-
-// Keyboard shortcuts
-document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  
-  switch(e.key) {
-    case '1':
-      document.querySelector('.quick-buttons button[data-hours="1"]').click();
-      break;
-    case '2':
-      document.querySelector('.quick-buttons button[data-hours="2"]').click();
-      break;
-    case '4':
-      document.querySelector('.quick-buttons button[data-hours="4"]').click();
-      break;
-    case '8':
-      document.querySelector('.quick-buttons button[data-hours="24"]').click();
-      break;
-    case 'r':
-    case 'R':
-      if (lastFetchParams) {
-        fetchData(lastFetchParams.startIso, lastFetchParams.endIso);
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort");
+      if (!key) return;
+      if (sortKey === key) {
+        sortDir = sortDir === "asc" ? "desc" : "asc";
+      } else {
+        sortKey = key;
+        sortDir = "desc";
       }
-      break;
-  }
-});
+      renderTable();
+    });
+  });
 
-// Initialize with default data
-window.addEventListener("load", () => {
-  // Pre-fill dates with today
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  document.getElementById("startDate").value = `${yyyy}-${mm}-${dd}`;
-  document.getElementById("endDate").value = `${yyyy}-${mm}-${dd}`;
+  dom.agentSearch.addEventListener("input", () => renderTable());
 
-  // Set up auto-refresh
-  setupAutoRefresh();
-  
-  // Load initial data
+  document.getElementById("exportBtn").addEventListener("click", exportToCsv);
+
+  dom.autoRefresh.addEventListener("change", (e) => {
+    setAutoRefresh(e.target.checked);
+  });
+}
+
+function init() {
   const endUtc = new Date();
-  const startUtc = new Date(endUtc.getTime() - 1 * 60 * 60 * 1000);
+  const startUtc = new Date(endUtc.getTime() - 60 * 60 * 1000);
+  setInputsForRange(startUtc, endUtc);
+
+  bindEvents();
   fetchData(startUtc.toISOString(), endUtc.toISOString());
-});
+}
+
+document.addEventListener("DOMContentLoaded", init);
