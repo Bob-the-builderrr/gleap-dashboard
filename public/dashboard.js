@@ -73,7 +73,8 @@ const dom = {
   archivedFetchBtn: document.getElementById("archivedFetchBtn"),
   ticketModal: document.getElementById("ticketModal"),
   modalContent: document.getElementById("modalContent"),
-  modalTitle: document.getElementById("modalTitle")
+  modalTitle: document.getElementById("modalTitle"),
+  mainControls: document.getElementById("mainControls")
 };
 
 // State
@@ -87,6 +88,8 @@ let matrixSortDir = "desc"; // For sorting the matrix by Total
 let lastRange = null;
 let autoRefreshTimer = null;
 let currentView = "overview";
+
+
 
 // === UTILITY FUNCTIONS ===
 
@@ -751,6 +754,13 @@ function switchView(view) {
   dom.overviewView.classList.add("hidden");
   dom.shiftsView.classList.add("hidden");
   dom.archivedView.classList.add("hidden");
+
+  // Handle Main Controls Visibility
+  if (view === "overview" || view === "shifts") {
+    dom.mainControls.classList.remove("hidden");
+  } else {
+    dom.mainControls.classList.add("hidden");
+  }
 
   if (view === "overview") {
     dom.overviewView.classList.remove("hidden");
