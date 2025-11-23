@@ -106,68 +106,147 @@
             </tbody>
           </table>
         </div>
-        <div class="panel">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h2 style="font-size: 1.5rem;">📦 Archived Tickets</h2>
-            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <div id="archivedCustomRange" class="hidden" style="display: flex; gap: 0.5rem; align-items: center;">
-                <input type="datetime-local" id="archivedStart" style="padding: 0.4rem;">
-                <span style="color: var(--text-muted);">-</span>
-                <input type="datetime-local" id="archivedEnd" style="padding: 0.4rem;">
-                <button id="archivedFetchBtn" class="primary-btn" style="padding: 0.4rem 0.8rem;">Go</button>
-              </div>
-              <select id="archivedWindow">
-                <option value="60">Last 1 hour</option>
-                <option value="120">Last 2 hours</option>
-                <option value="240">Last 4 hours</option>
-                <option value="480">Last 8 hours</option>
-                <option value="1440">Last 24 hours</option>
-                <option value="custom">Custom Range</option>
-              </select>
-              <input id="archivedSearch" type="search" placeholder="🔍 Search archived...">
-            </div>
-          </div>
+      </div>
+    </div>
 
+    <!-- Shifts Section -->
+    <div id="shiftsView" class="hidden">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+        <!-- Morning Shift -->
+        <div class="panel">
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌅 Morning Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">05:00 - 14:00</span></h3>
           <div class="table-wrapper">
             <table>
               <thead>
                 <tr>
                   <th>Agent</th>
-                  <th class="number">Count</th>
-                  <th>Latest Archived (IST)</th>
+                  <th class="number">Tickets</th>
+                  <th>Rating</th>
                   <th>Last Seen</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody id="archivedTableBody">
+              <tbody id="morningBody">
                 <tr>
-                  <td colspan="5" class="no-data">Loading...</td>
+                  <td colspan="4" class="no-data">No data</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <!-- Hourly Matrix -->
+        <!-- Noon Shift -->
         <div class="panel">
-          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">⏰ Hourly Archive Matrix (IST)</h3>
-          <div class="table-wrapper" style="overflow-x: auto;">
-            <table class="hourly-table">
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">☀️ Noon Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">12:00 - 21:00</span></h3>
+          <div class="table-wrapper">
+            <table>
               <thead>
-                <tr id="archivedMatrixHeader">
-                  <th class="sticky-col">Agent</th>
-                  <!-- Hours 0-23 will be injected here -->
+                <tr>
+                  <th>Agent</th>
+                  <th class="number">Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
                 </tr>
               </thead>
-              <tbody id="archivedMatrixBody">
+              <tbody id="noonBody">
                 <tr>
-                  <td colspan="25" class="no-data">Loading matrix...</td>
+                  <td colspan="4" class="no-data">No data</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Night Shift -->
+        <div class="panel">
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌙 Night Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">20:00 - 05:00</span></h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th class="number">Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="nightBody">
+                <tr>
+                  <td colspan="4" class="no-data">No data</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Archived Section -->
+    <div id="archivedView" class="hidden">
+      <div class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h2 style="font-size: 1.5rem;">📦 Archived Tickets</h2>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <div id="archivedCustomRange" class="hidden" style="display: flex; gap: 0.5rem; align-items: center;">
+              <input type="datetime-local" id="archivedStart" style="padding: 0.4rem;">
+              <span style="color: var(--text-muted);">-</span>
+              <input type="datetime-local" id="archivedEnd" style="padding: 0.4rem;">
+              <button id="archivedFetchBtn" class="primary-btn" style="padding: 0.4rem 0.8rem;">Go</button>
+            </div>
+            <select id="archivedWindow">
+              <option value="60">Last 1 hour</option>
+              <option value="120">Last 2 hours</option>
+              <option value="240">Last 4 hours</option>
+              <option value="480">Last 8 hours</option>
+              <option value="1440">Last 24 hours</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            <input id="archivedSearch" type="search" placeholder="🔍 Search archived...">
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th class="number">Count</th>
+                <th>Latest Archived (IST)</th>
+                <th>Last Seen</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="archivedTableBody">
+              <tr>
+                <td colspan="5" class="no-data">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Hourly Matrix -->
+      <div class="panel">
+        <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">⏰ Hourly Archive Matrix (IST)</h3>
+        <div class="table-wrapper" style="overflow-x: auto;">
+          <table class="hourly-table">
+            <thead>
+              <tr id="archivedMatrixHeader">
+                <th class="sticky-col">Agent</th>
+                <!-- Hours 0-23 will be injected here -->
+              </tr>
+            </thead>
+            <tbody id="archivedMatrixBody">
+              <tr>
+                <td colspan="25" class="no-data">Loading matrix...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- Ticket List Modal -->

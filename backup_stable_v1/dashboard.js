@@ -351,12 +351,12 @@ function updateSummaryCards(agents) {
 function renderShifts() {
   if (!shiftsData) return;
 
-  renderShiftTable(dom.morningBody, shiftsData.morning, SHIFTS_ROSTER.morning, "morningTotal");
-  renderShiftTable(dom.noonBody, shiftsData.noon, SHIFTS_ROSTER.noon, "noonTotal");
-  renderShiftTable(dom.nightBody, shiftsData.night, SHIFTS_ROSTER.night, "nightTotal");
+  renderShiftTable(dom.morningBody, shiftsData.morning, SHIFTS_ROSTER.morning);
+  renderShiftTable(dom.noonBody, shiftsData.noon, SHIFTS_ROSTER.noon);
+  renderShiftTable(dom.nightBody, shiftsData.night, SHIFTS_ROSTER.night);
 }
 
-function renderShiftTable(tbody, agents, roster, totalElementId) {
+function renderShiftTable(tbody, agents, roster) {
   tbody.innerHTML = "";
 
   const shiftAgents = agents.filter(a => {
@@ -366,15 +366,6 @@ function renderShiftTable(tbody, agents, roster, totalElementId) {
     const isMember = roster.members.some(m => email === m || name.includes(m));
     return isLeader || isMember;
   });
-
-  // Calculate Total Tickets for this shift
-  const totalTickets = shiftAgents.reduce((sum, agent) => sum + (agent.ticket_activity || 0), 0);
-  const totalEl = document.getElementById(totalElementId);
-  if (totalEl) {
-    totalEl.textContent = `Total: ${totalTickets}`;
-    // Optional: Add color coding based on volume
-    totalEl.className = `chip rating ${totalTickets > 0 ? 'good' : ''}`;
-  }
 
   if (!shiftAgents.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="no-data">No agents active</td></tr>';
