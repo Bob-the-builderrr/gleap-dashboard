@@ -617,7 +617,7 @@ async function fetchArchivedTickets(minutes) {
 
 /**
  * Process archived tickets and build data structures
- * Uses IST Offset (+5:30) logic as requested
+ * Uses IST Offset (+5:30) logic strictly.
  */
 function processArchivedTickets(tickets, minutes) {
   const IST_OFFSET_MINUTES = 330; // +05:30
@@ -629,8 +629,10 @@ function processArchivedTickets(tickets, minutes) {
   // Start window (IST)
   const windowStartIST = new Date(nowIST.getTime() - minutes * 60 * 1000);
 
-  console.log(`Current time (IST): ${nowIST.toISOString()}`);
-  console.log(`Window start (IST): ${windowStartIST.toISOString()}`);
+  console.log(`--- Processing Archived Tickets ---`);
+  console.log(`Current Time (IST): ${nowIST.toISOString().replace('T', ' ').substring(0, 19)}`);
+  console.log(`Window Start (IST): ${windowStartIST.toISOString().replace('T', ' ').substring(0, 19)}`);
+  console.log(`Total Tickets Fetched: ${tickets.length}`);
 
   const agentMap = new Map();
   const hourlyMap = new Map();
@@ -653,9 +655,13 @@ function processArchivedTickets(tickets, minutes) {
 
     const archivedIST = new Date(archivedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 
+    // Debug log for first few tickets or specific ones
+    // console.log(`Ticket ${ticket.id}: Archived UTC: ${ticket.archivedAt} -> IST: ${archivedIST.toISOString()}`);
+
     // Check if archived IST time falls inside the window
     if (archivedIST >= windowStartIST && archivedIST <= nowIST) {
       matchedCount++;
+      // console.log(`>>> MATCHED: ${agentName} at ${archivedIST.toISOString()}`);
 
       // Add to agent map
       if (!agentMap.has(agentId)) {
@@ -696,7 +702,7 @@ function processArchivedTickets(tickets, minutes) {
     }
   });
 
-  console.log(`Matched ${matchedCount} tickets in window`);
+  console.log(`Total Matched in Window: ${matchedCount}`);
   return { agentMap, hourlyMap };
 }
 
