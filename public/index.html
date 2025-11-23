@@ -68,6 +68,7 @@
     <div class="view-toggles">
       <button class="tab-btn active" data-view="overview">Overview</button>
       <button class="tab-btn" data-view="shifts">Shift Performance</button>
+      <button class="tab-btn" data-view="archived">Archived Tickets</button>
     </div>
 
     <div id="overviewView">
@@ -127,135 +128,171 @@
       </section>
     </div>
 
-    <div id="shiftsView" class="hidden">
-      <div class="shifts-container">
-        <!-- Morning Shift -->
-        <section class="panel shift-panel" id="shiftMorning">
-          <div class="shift-header">
-            <div class="shift-title">
-              <h3>Morning Shift</h3>
-              <span class="shift-time">05:00 AM - 02:00 PM</span>
-            </div>
-            <div class="shift-stat">
-              <span class="label">Shift Total</span>
-              <span class="value" id="morningTotal">--</span>
-            </div>
-          </div>
-          <div class="table-wrapper">
-            <table class="shift-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Tickets</th>
-                  <th>Rating</th>
-                  <th>Last Seen</th>
-                </tr>
-              </thead>
-              <tbody id="morningBody"></tbody>
-            </table>
-          </div>
-        </section>
-        <!-- Noon Shift -->
-        <section class="panel shift-panel" id="shiftNoon">
-          <div class="shift-header">
-            <div class="shift-title">
-              <h3>Noon Shift</h3>
-              <span class="shift-time">12:00 PM - 09:00 PM</span>
-            </div>
-            <div class="shift-stat">
-              <span class="label">Shift Total</span>
-              <span class="value" id="noonTotal">--</span>
-            </div>
-          </div>
-          <div class="table-wrapper">
-            <table class="shift-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Tickets</th>
-                  <th>Rating</th>
-                  <th>Last Seen</th>
-                </tr>
-              </thead>
-              <tbody id="noonBody"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Night Shift -->
-        <section class="panel shift-panel" id="shiftNight">
-          <div class="shift-header">
-            <div class="shift-title">
-              <h3>Night Shift</h3>
-              <span class="shift-time">08:00 PM - 05:00 AM</span>
-            </div>
-            <div class="shift-stat">
-              <span class="label">Shift Total</span>
-              <span class="value" id="nightTotal">--</span>
-            </div>
-          </div>
-          <div class="table-wrapper">
-            <table class="shift-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Tickets</th>
-                  <th>Rating</th>
-                  <th>Last Seen</th>
-                </tr>
-              </thead>
-              <tbody id="nightBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-
-      <!-- Hourly Matrix -->
-      <section class="panel table-card hidden" id="hourlySection" style="margin-top: 24px;">
+    <div id="shiftsView" class="hidden"></div>
+    <div id="archivedView" class="hidden">
+      <section class="panel table-card">
         <div class="table-head">
           <div>
-            <h2>Hourly Breakdown</h2>
-            <p class="caption muted-text">Tickets worked per hour (IST)</p>
+            <h2>Archived Tickets</h2>
+            <p class="caption muted-text">Tickets archived in the selected time window</p>
+          </div>
+          <div class="table-tools">
+            <select id="archivedWindow" class="window-selector">
+              <option value="30">Last 30 min</option>
+              <option value="60" selected>Last 1 hour</option>
+              <option value="120">Last 2 hours</option>
+              <option value="240">Last 4 hours</option>
+            </select>
+            <input id="archivedSearch" type="search" placeholder="Search name or email" />
           </div>
         </div>
-        <div class="table-wrapper" style="overflow-x: auto;">
-          <table class="hourly-table">
+        <div class="table-wrapper">
+          <table>
             <thead>
-              <tr id="hourlyMatrixHeader">
-                <th class="sticky-col">Agent</th>
-                <th>00</th>
-                <th>01</th>
-                <th>02</th>
-                <th>03</th>
-                <th>04</th>
-                <th>05</th>
-                <th>06</th>
-                <th>07</th>
-                <th>08</th>
-                <th>09</th>
-                <th>10</th>
-                <th>11</th>
-                <th>12</th>
-                <th>13</th>
-                <th>14</th>
-                <th>15</th>
-                <th>16</th>
-                <th>17</th>
-                <th>18</th>
-                <th>19</th>
-                <th>20</th>
-                <th>21</th>
-                <th>22</th>
-                <th>23</th>
-                <th>Total</th>
+              <tr>
+                <th>Agent</th>
+                <th>Archived Count</th>
+                <th>Latest Date</th>
+                <th>Latest Time</th>
               </tr>
             </thead>
-            <tbody id="hourlyMatrixBody">
-              <!-- Populated by JS -->
+            <tbody id="archivedTableBody">
+              <tr>
+                <td colspan="4" class="no-data">Fetching data...</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </section>
+    </div>
+    <div class="shifts-container">
+      <!-- Morning Shift -->
+      <section class="panel shift-panel" id="shiftMorning">
+        <div class="shift-header">
+          <div class="shift-title">
+            <h3>Morning Shift</h3>
+            <span class="shift-time">05:00 AM - 02:00 PM</span>
+          </div>
+          <div class="shift-stat">
+            <span class="label">Shift Total</span>
+            <span class="value" id="morningTotal">--</span>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="shift-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Tickets</th>
+                <th>Rating</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="morningBody"></tbody>
+          </table>
+        </div>
+      </section>
+      <!-- Noon Shift -->
+      <section class="panel shift-panel" id="shiftNoon">
+        <div class="shift-header">
+          <div class="shift-title">
+            <h3>Noon Shift</h3>
+            <span class="shift-time">12:00 PM - 09:00 PM</span>
+          </div>
+          <div class="shift-stat">
+            <span class="label">Shift Total</span>
+            <span class="value" id="noonTotal">--</span>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="shift-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Tickets</th>
+                <th>Rating</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="noonBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Night Shift -->
+      <section class="panel shift-panel" id="shiftNight">
+        <div class="shift-header">
+          <div class="shift-title">
+            <h3>Night Shift</h3>
+            <span class="shift-time">08:00 PM - 05:00 AM</span>
+          </div>
+          <div class="shift-stat">
+            <span class="label">Shift Total</span>
+            <span class="value" id="nightTotal">--</span>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="shift-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Tickets</th>
+                <th>Rating</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="nightBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Hourly Matrix -->
+    <section class="panel table-card hidden" id="hourlySection" style="margin-top: 24px;">
+      <div class="table-head">
+        <div>
+          <h2>Hourly Breakdown</h2>
+          <p class="caption muted-text">Tickets worked per hour (IST)</p>
+        </div>
+      </div>
+      <div class="table-wrapper" style="overflow-x: auto;">
+        <table class="hourly-table">
+          <thead>
+            <tr id="hourlyMatrixHeader">
+              <th class="sticky-col">Agent</th>
+              <th>00</th>
+              <th>01</th>
+              <th>02</th>
+              <th>03</th>
+              <th>04</th>
+              <th>05</th>
+              <th>06</th>
+              <th>07</th>
+              <th>08</th>
+              <th>09</th>
+              <th>10</th>
+              <th>11</th>
+              <th>12</th>
+              <th>13</th>
+              <th>14</th>
+              <th>15</th>
+              <th>16</th>
+              <th>17</th>
+              <th>18</th>
+              <th>19</th>
+              <th>20</th>
+              <th>21</th>
+              <th>22</th>
+              <th>23</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="hourlyMatrixBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
     </div>
   </main>
 

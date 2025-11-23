@@ -2,6 +2,17 @@
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Archived tickets API
+// ---------------------------------------------------------------------------
+const ARCHIVED_API_URL = "https://dashapi.gleap.io/v3/tickets";
+const ARCHIVED_API_HEADERS = {
+  Accept: "application/json",
+  Authorization:
+    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE",
+  project: "64d9fa1b014ae7130f2e58d1",
+};
+
 let agentsData = [];
 let shiftsData = null; // Stores the result of the shift fetch
 let hourlyData = null;
@@ -10,7 +21,8 @@ let sortDir = "desc";
 let lastRange = null;
 let autoRefreshTimer = null;
 let isLoading = false;
-let currentView = "overview"; // 'overview' or 'shifts'
+let currentView = "overview"; // 'overview', 'shifts', or 'archived'
+let archivedRawTickets = null; // Cache for archived tickets data
 
 const SHIFTS_ROSTER = {
   morning: {
@@ -58,6 +70,7 @@ const dom = {
   // Views
   overviewView: document.getElementById("overviewView"),
   shiftsView: document.getElementById("shiftsView"),
+  archivedView: document.getElementById("archivedView"),
   tabBtns: document.querySelectorAll(".tab-btn"),
   // Shifts
   morningBody: document.getElementById("morningBody"),
@@ -69,6 +82,10 @@ const dom = {
   // Hourly Matrix
   hourlyMatrixBody: document.getElementById("hourlyMatrixBody"),
   hourlyMatrixHeader: document.getElementById("hourlyMatrixHeader"),
+  // Archived
+  archivedTableBody: document.getElementById("archivedTableBody"),
+  archivedSearch: document.getElementById("archivedSearch"),
+  archivedWindow: document.getElementById("archivedWindow"),
 };
 
 function toInputValue(date) {
@@ -444,7 +461,17 @@ async function fetchData(startIso, endIso) {
         (a) => a.agent_name && (a.agent_email || a.agent_name !== "Unknown")
       )
       : [];
-    updateSummaryCards(overview?.totals || {}, overview?.total_agents);
+
+    // Recalculate totals based on the filtered frontend list to ensure consistency
+    const calculatedTotalTickets = agentsData.reduce((sum, a) => sum + (Number(a.ticket_activity) || 0), 0);
+
+    // Use the backend average rating, but our calculated total tickets
+    const displayTotals = {
+      ...overview?.totals,
+      total_tickets: calculatedTotalTickets
+    };
+
+    updateSummaryCards(displayTotals, agentsData.length);
     renderTable();
 
     // 2. Process Shifts
@@ -557,6 +584,160 @@ function setAutoRefresh(enabled) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Archived Tickets Functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch archived tickets from Gleap.
+ * The API does not accept a time range, so we fetch the maximum batch
+ * and filter client-side.
+ */
+async function fetchArchivedTickets(limit = 1000) {
+  const url = `${ARCHIVED_API_URL}?skip=0&limit=${limit}&filter={}&sort=-lastNotification&ignoreArchived=false&isSpam=false&type[]=INQUIRY&archived=true`;
+  const res = await fetch(url, { headers: ARCHIVED_API_HEADERS });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err?.error || "Failed to fetch archived tickets");
+  }
+  const data = await res.json();
+  return data.tickets || [];
+}
+
+/**
+ * Transform raw tickets into a map keyed by processing user.
+ */
+function buildArchivedMap(tickets) {
+  const map = new Map();
+
+  tickets.forEach((t) => {
+    const user = t.processingUser || {};
+    const agentId = user.id || t.session?.id || "unknown";
+    const name = user.firstName || user.email?.split("@")[0] || "Unknown";
+    const email = user.email || "";
+
+    const archivedAtStr = t.archivedAt || (t.latestComment && t.latestComment.archivedAt);
+    if (!archivedAtStr) return;
+
+    const archivedAt = new Date(archivedAtStr);
+    if (Number.isNaN(archivedAt.getTime())) return;
+
+    if (!map.has(agentId)) {
+      map.set(agentId, { name, email, profileImage: user.profileImageUrl || "", tickets: [], latest: archivedAt });
+    }
+    const entry = map.get(agentId);
+    entry.tickets.push(archivedAt);
+    if (archivedAt > entry.latest) entry.latest = archivedAt;
+  });
+
+  return map;
+}
+
+/**
+ * Filter the archived map to only include tickets inside the window.
+ */
+function filterArchivedByWindow(map, minutes) {
+  const now = new Date();
+  const windowStartUtc = new Date(now.getTime() - minutes * 60 * 1000);
+
+  const rows = [];
+
+  map.forEach((entry) => {
+    const count = entry.tickets.filter((d) => d >= windowStartUtc && d <= now).length;
+    if (count === 0) return;
+
+    rows.push({
+      name: entry.name,
+      email: entry.email,
+      profileImage: entry.profileImage,
+      count,
+      latest: entry.latest,
+    });
+  });
+
+  rows.sort((a, b) => b.count - a.count);
+  return rows;
+}
+
+/**
+ * Render the archived tickets table.
+ */
+function renderArchivedTable(rows) {
+  const tbody = dom.archivedTableBody;
+  tbody.innerHTML = "";
+
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="5" class="no-data">No archived tickets in this window</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach((r) => {
+    const { name, email, profileImage, count, latest } = r;
+    const date = latest.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const time = latest.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <div class="agent">
+          <div class="avatar ${profileImage ? "" : "placeholder"}">
+            ${profileImage
+        ? `<img src="${profileImage}" alt="${name}" loading="lazy" />`
+        : name.charAt(0)
+      }
+          </div>
+          <div>
+            <div class="agent-name">${name}</div>
+            <div class="agent-email">${email}</div>
+          </div>
+        </div>
+      </td>
+      <td class="number">${count}</td>
+      <td>${date}</td>
+      <td>${time}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * Main function to fetch and render archived tickets.
+ */
+async function fetchAndRenderArchived() {
+  try {
+    setLoading(true, "Fetching archived tickets…");
+    const tickets = await fetchArchivedTickets();
+    archivedRawTickets = tickets;
+    updateArchivedView();
+  } catch (err) {
+    showError(err.message || "Failed to load archived tickets");
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+}
+
+/**
+ * Update the archived view based on current window selection.
+ */
+function updateArchivedView() {
+  if (!archivedRawTickets) return;
+  const minutes = Number(dom.archivedWindow.value);
+  const map = buildArchivedMap(archivedRawTickets);
+  const rows = filterArchivedByWindow(map, minutes);
+  renderArchivedTable(rows);
+}
+
+
 function switchView(view) {
   currentView = view;
   dom.tabBtns.forEach(btn => {
@@ -566,9 +747,17 @@ function switchView(view) {
   if (view === "overview") {
     dom.overviewView.classList.remove("hidden");
     dom.shiftsView.classList.add("hidden");
-  } else {
+    dom.archivedView.classList.add("hidden");
+  } else if (view === "shifts") {
     dom.overviewView.classList.add("hidden");
     dom.shiftsView.classList.remove("hidden");
+    dom.archivedView.classList.add("hidden");
+  } else if (view === "archived") {
+    dom.overviewView.classList.add("hidden");
+    dom.shiftsView.classList.add("hidden");
+    dom.archivedView.classList.remove("hidden");
+    // Load data if we haven't already
+    if (!archivedRawTickets) fetchAndRenderArchived();
   }
 }
 
@@ -613,6 +802,33 @@ function bindEvents() {
       switchView(btn.dataset.view);
     });
   });
+
+  // Archived tickets event listeners
+  if (dom.archivedWindow) {
+    dom.archivedWindow.addEventListener("change", () => {
+      if (archivedRawTickets) {
+        updateArchivedView();
+      }
+    });
+  }
+
+  if (dom.archivedSearch) {
+    dom.archivedSearch.addEventListener("input", () => {
+      if (!archivedRawTickets) return;
+      const term = dom.archivedSearch.value.trim().toLowerCase();
+      const minutes = Number(dom.archivedWindow.value);
+      const map = buildArchivedMap(archivedRawTickets);
+      const rows = filterArchivedByWindow(map, minutes);
+
+      const filtered = rows.filter((r) => {
+        const name = r.name.toLowerCase();
+        const email = r.email.toLowerCase();
+        return name.includes(term) || email.includes(term);
+      });
+
+      renderArchivedTable(filtered);
+    });
+  }
 }
 
 function init() {
