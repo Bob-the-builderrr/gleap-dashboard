@@ -45,13 +45,73 @@
     *   Hourly Matrix (Heatmap).
     *   *Lazy Loaded:* Only fetches on tab click.
 
-### 3. API Endpoints (Direct Calls)
-*   **Team Performance:** `https://dashapi.gleap.io/v3/statistics/lists`
-    *   Used for: Overview, Shifts.
-    *   Params: `startDate`, `endDate`, `team`, `aggsType=MEDIAN`.
-*   **Archived Tickets:** `https://dashapi.gleap.io/v3/tickets`
-    *   Used for: Archived View.
-    *   Params: `archived=true`, `type=INQUIRY`, `limit` (dynamic).
+### 3. API Reference (Direct Calls)
+
+#### A. Team Performance (Overview & Shifts)
+**Endpoint:** `https://dashapi.gleap.io/v3/statistics/lists`
+**Purpose:** Fetches agent performance metrics (tickets, replies, ratings).
+
+**cURL Command:**
+```bash
+curl -X GET "https://dashapi.gleap.io/v3/statistics/lists?chartType=TEAM_PERFORMANCE_LIST&startDate=2025-11-24T04:00:00.000Z&endDate=2025-11-24T05:00:00.000Z&useWorkingHours=false&team=66595e93b58fb2a1e6b8a83f&aggsType=MEDIAN" \
+  -H "Authorization: Bearer <YOUR_TOKEN>" \
+  -H "project: 64d9fa1b014ae7130f2e58d1"
+```
+
+**Mock Response Data:**
+```json
+{
+  "list": [
+    {
+      "processingUser": {
+        "id": "user_123",
+        "firstName": "John",
+        "lastName": "Doe",
+        "email": "john@example.com",
+        "profileImageUrl": "https://...",
+        "lastSeen": "2025-11-24T04:55:00.000Z"
+      },
+      "totalCountForUser": { "value": 42 },
+      "rawClosed": { "value": 35 },
+      "medianReplyTime": { "rawValue": 120 }, // Seconds
+      "medianTimeToFirstReplyInSec": { "rawValue": 60 },
+      "averageRating": { "value": 95 },
+      "ticketActivityCount": { "value": 42 },
+      "hoursActive": { "rawValue": 3600 }
+    }
+  ]
+}
+```
+
+#### B. Archived Tickets (Archived View)
+**Endpoint:** `https://dashapi.gleap.io/v3/tickets`
+**Purpose:** Fetches raw ticket data for the "Archived" tab to build the matrix and list.
+
+**cURL Command:**
+```bash
+curl -X GET "https://dashapi.gleap.io/v3/tickets?skip=0&limit=200&filter={}&sort=-archivedAt&ignoreArchived=true&isSpam=false&type[]=INQUIRY&archived=true" \
+  -H "Authorization: Bearer <YOUR_TOKEN>" \
+  -H "project: 64d9fa1b014ae7130f2e58d1"
+```
+
+**Mock Response Data:**
+```json
+{
+  "tickets": [
+    {
+      "id": "ticket_abc",
+      "bugId": 101,
+      "archived": true,
+      "archivedAt": "2025-11-24T04:30:00.000Z",
+      "processingUser": {
+        "id": "user_123",
+        "firstName": "John",
+        "email": "john@example.com"
+      }
+    }
+  ]
+}
+```
 
 ## 📝 Common Pitfalls (How we broke it before)
 *   **Issue:** Moving `controls` inside `overviewView`.
