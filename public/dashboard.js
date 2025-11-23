@@ -22,7 +22,6 @@ let lastRange = null;
 let autoRefreshTimer = null;
 let isLoading = false;
 let currentView = "overview"; // 'overview', 'shifts', or 'archived'
-let archivedRawTickets = null; // Cache for archived tickets data
 
 const SHIFTS_ROSTER = {
   morning: {
@@ -590,10 +589,15 @@ function setAutoRefresh(enabled) {
 
 /**
  * Fetch archived tickets from Gleap.
- * The API does not accept a time range, so we fetch the maximum batch
- * and filter client-side.
+ * Fetches fresh data each time with appropriate limit based on time window.
  */
-async function fetchArchivedTickets(limit = 1000) {
+async function fetchArchivedTickets(minutes) {
+  // Determine limit based on time window
+  let limit = 200; // Default for 30 min and 1 hour
+  if (minutes >= 240) {
+    limit = 500; // 4 hours
+  }
+
   const url = `${ARCHIVED_API_URL}?skip=0&limit=${limit}&filter={}&sort=-lastNotification&ignoreArchived=false&isSpam=false&type[]=INQUIRY&archived=true`;
   const res = await fetch(url, { headers: ARCHIVED_API_HEADERS });
   if (!res.ok) {
@@ -668,7 +672,7 @@ function renderArchivedTable(rows) {
 
   if (!rows.length) {
     const tr = document.createElement("tr");
-    tr.innerHTML = '<td colspan="5" class="no-data">No archived tickets in this window</td>';
+    tr.innerHTML = '<td colspan="4" class="no-data">No archived tickets in this window</td>';
     tbody.appendChild(tr);
     return;
   }
@@ -711,30 +715,22 @@ function renderArchivedTable(rows) {
 
 /**
  * Main function to fetch and render archived tickets.
+ * Fetches fresh data each time it's called.
  */
 async function fetchAndRenderArchived() {
   try {
-    setLoading(true, "Fetching archived tickets…");
-    const tickets = await fetchArchivedTickets();
-    archivedRawTickets = tickets;
-    updateArchivedView();
+    const minutes = Number(dom.archivedWindow.value);
+    setLoading(true, `Fetching archived tickets (last ${minutes} min)…`);
+    const tickets = await fetchArchivedTickets(minutes);
+    const map = buildArchivedMap(tickets);
+    const rows = filterArchivedByWindow(map, minutes);
+    renderArchivedTable(rows);
   } catch (err) {
     showError(err.message || "Failed to load archived tickets");
     console.error(err);
   } finally {
     setLoading(false);
   }
-}
-
-/**
- * Update the archived view based on current window selection.
- */
-function updateArchivedView() {
-  if (!archivedRawTickets) return;
-  const minutes = Number(dom.archivedWindow.value);
-  const map = buildArchivedMap(archivedRawTickets);
-  const rows = filterArchivedByWindow(map, minutes);
-  renderArchivedTable(rows);
 }
 
 
@@ -756,8 +752,8 @@ function switchView(view) {
     dom.overviewView.classList.add("hidden");
     dom.shiftsView.classList.add("hidden");
     dom.archivedView.classList.remove("hidden");
-    // Load data if we haven't already
-    if (!archivedRawTickets) fetchAndRenderArchived();
+    // Always fetch fresh data when tab is opened
+    fetchAndRenderArchived();
   }
 }
 
@@ -806,27 +802,8 @@ function bindEvents() {
   // Archived tickets event listeners
   if (dom.archivedWindow) {
     dom.archivedWindow.addEventListener("change", () => {
-      if (archivedRawTickets) {
-        updateArchivedView();
-      }
-    });
-  }
-
-  if (dom.archivedSearch) {
-    dom.archivedSearch.addEventListener("input", () => {
-      if (!archivedRawTickets) return;
-      const term = dom.archivedSearch.value.trim().toLowerCase();
-      const minutes = Number(dom.archivedWindow.value);
-      const map = buildArchivedMap(archivedRawTickets);
-      const rows = filterArchivedByWindow(map, minutes);
-
-      const filtered = rows.filter((r) => {
-        const name = r.name.toLowerCase();
-        const email = r.email.toLowerCase();
-        return name.includes(term) || email.includes(term);
-      });
-
-      renderArchivedTable(filtered);
+      // Fetch fresh data each time window changes
+      fetchAndRenderArchived();
     });
   }
 }
