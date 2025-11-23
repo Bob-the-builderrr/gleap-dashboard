@@ -134,7 +134,7 @@
         <div class="table-head">
           <div>
             <h2>Archived Tickets</h2>
-            <p class="caption muted-text">Tickets archived in the selected time window</p>
+            <p class="caption muted-text">Tickets archived in the selected time window (IST)</p>
           </div>
           <div class="table-tools">
             <select id="archivedWindow" class="window-selector">
@@ -142,6 +142,7 @@
               <option value="60" selected>Last 1 hour</option>
               <option value="120">Last 2 hours</option>
               <option value="240">Last 4 hours</option>
+              <option value="480">Last 8 hours</option>
             </select>
             <input id="archivedSearch" type="search" placeholder="Search name or email" />
           </div>
@@ -154,14 +155,28 @@
                 <th>Archived Count</th>
                 <th>Latest Date</th>
                 <th>Latest Time</th>
+                <th>Last Seen</th>
               </tr>
             </thead>
             <tbody id="archivedTableBody">
               <tr>
-                <td colspan="4" class="no-data">Fetching data...</td>
+                <td colspan="5" class="no-data">Fetching data...</td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- Hourly Breakdown Section -->
+      <section class="panel" style="margin-top: 20px;">
+        <div class="table-head">
+          <div>
+            <h2>Hourly Breakdown</h2>
+            <p class="caption muted-text">Tickets archived per hour with agent details (IST)</p>
+          </div>
+        </div>
+        <div id="archivedHourlyBreakdown" class="hourly-breakdown-container">
+          <!-- Populated by JavaScript -->
         </div>
       </section>
     </div>

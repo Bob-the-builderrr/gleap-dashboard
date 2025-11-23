@@ -594,11 +594,14 @@ function setAutoRefresh(enabled) {
 async function fetchArchivedTickets(minutes) {
   // Determine limit based on time window
   let limit = 200; // Default for 30 min and 1 hour
-  if (minutes >= 240) {
-    limit = 500; // 4 hours
+  if (minutes >= 120) {
+    limit = 500; // 2 hours and above
+  }
+  if (minutes >= 480) {
+    limit = 1000; // 8 hours
   }
 
-  const url = `${ARCHIVED_API_URL}?skip=0&limit=${limit}&filter={}&sort=-lastNotification&ignoreArchived=false&isSpam=false&type[]=INQUIRY&archived=true`;
+  const url = `${ARCHIVED_API_URL}?skip=0&limit=${limit}&filter={}&sort=-archivedAt&ignoreArchived=false&isSpam=false&type[]=INQUIRY&archived=true`;
   const res = await fetch(url, { headers: ARCHIVED_API_HEADERS });
   if (!res.ok) {
     const err = await res.json();
@@ -609,85 +612,148 @@ async function fetchArchivedTickets(minutes) {
 }
 
 /**
- * Transform raw tickets into a map keyed by processing user.
+ * Convert UTC date to IST
  */
-function buildArchivedMap(tickets) {
-  const map = new Map();
-
-  tickets.forEach((t) => {
-    const user = t.processingUser || {};
-    const agentId = user.id || t.session?.id || "unknown";
-    const name = user.firstName || user.email?.split("@")[0] || "Unknown";
-    const email = user.email || "";
-
-    const archivedAtStr = t.archivedAt || (t.latestComment && t.latestComment.archivedAt);
-    if (!archivedAtStr) return;
-
-    const archivedAt = new Date(archivedAtStr);
-    if (Number.isNaN(archivedAt.getTime())) return;
-
-    if (!map.has(agentId)) {
-      map.set(agentId, { name, email, profileImage: user.profileImageUrl || "", tickets: [], latest: archivedAt });
-    }
-    const entry = map.get(agentId);
-    entry.tickets.push(archivedAt);
-    if (archivedAt > entry.latest) entry.latest = archivedAt;
-  });
-
-  return map;
+function convertToIST(utcDate) {
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  return new Date(utcDate.getTime() + istOffset);
 }
 
 /**
- * Filter the archived map to only include tickets inside the window.
+ * Get current IST time
  */
-function filterArchivedByWindow(map, minutes) {
+function getCurrentIST() {
   const now = new Date();
-  const windowStartUtc = new Date(now.getTime() - minutes * 60 * 1000);
+  return convertToIST(now);
+}
 
-  const rows = [];
+/**
+ * Process archived tickets and build data structures
+ */
+function processArchivedTickets(tickets, minutes) {
+  const nowIST = getCurrentIST();
+  const windowStartIST = new Date(nowIST.getTime() - minutes * 60 * 1000);
 
-  map.forEach((entry) => {
-    const count = entry.tickets.filter((d) => d >= windowStartUtc && d <= now).length;
-    if (count === 0) return;
+  console.log(`Processing archived tickets for window: ${windowStartIST.toISOString()} to ${nowIST.toISOString()}`);
 
-    rows.push({
-      name: entry.name,
-      email: entry.email,
-      profileImage: entry.profileImage,
-      count,
-      latest: entry.latest,
-    });
+  const agentMap = new Map();
+  const hourlyMap = new Map();
+
+  tickets.forEach((ticket) => {
+    // Check if ticket is archived
+    if (!ticket.archived || !ticket.archivedAt) return;
+
+    const user = ticket.processingUser || {};
+    const agentId = user.id || "unknown";
+    const agentName = user.firstName || user.email?.split("@")[0] || "Unknown";
+    const agentEmail = user.email || "";
+    const profileImage = user.profileImageUrl || "";
+    const lastSeen = user.lastSeen || null;
+
+    // Parse archivedAt timestamp (UTC)
+    const archivedAtUTC = new Date(ticket.archivedAt);
+    if (Number.isNaN(archivedAtUTC.getTime())) return;
+
+    // Convert to IST
+    const archivedAtIST = convertToIST(archivedAtUTC);
+
+    // Check if this ticket falls within the time window
+    if (archivedAtIST < windowStartIST || archivedAtIST > nowIST) {
+      return; // Skip tickets outside window
+    }
+
+    // Add to agent map
+    if (!agentMap.has(agentId)) {
+      agentMap.set(agentId, {
+        name: agentName,
+        email: agentEmail,
+        profileImage,
+        lastSeen,
+        tickets: [],
+        latestArchived: archivedAtIST
+      });
+    }
+
+    const agentData = agentMap.get(agentId);
+    agentData.tickets.push(archivedAtIST);
+    if (archivedAtIST > agentData.latestArchived) {
+      agentData.latestArchived = archivedAtIST;
+    }
+
+    // Add to hourly breakdown
+    const hour = archivedAtIST.getHours();
+    const hourKey = `h${hour}`;
+
+    if (!hourlyMap.has(hourKey)) {
+      hourlyMap.set(hourKey, new Map());
+    }
+
+    const hourAgents = hourlyMap.get(hourKey);
+    if (!hourAgents.has(agentId)) {
+      hourAgents.set(agentId, {
+        name: agentName,
+        email: agentEmail,
+        count: 0
+      });
+    }
+
+    hourAgents.get(agentId).count++;
   });
 
-  rows.sort((a, b) => b.count - a.count);
-  return rows;
+  return { agentMap, hourlyMap };
 }
 
 /**
  * Render the archived tickets table.
  */
-function renderArchivedTable(rows) {
+function renderArchivedTable(agentMap) {
   const tbody = dom.archivedTableBody;
   tbody.innerHTML = "";
 
+  // Convert map to array and sort by count
+  const rows = Array.from(agentMap.values()).map(agent => ({
+    name: agent.name,
+    email: agent.email,
+    profileImage: agent.profileImage,
+    lastSeen: agent.lastSeen,
+    count: agent.tickets.length,
+    latestArchived: agent.latestArchived
+  }));
+
+  rows.sort((a, b) => b.count - a.count);
+
   if (!rows.length) {
     const tr = document.createElement("tr");
-    tr.innerHTML = '<td colspan="4" class="no-data">No archived tickets in this window</td>';
+    tr.innerHTML = '<td colspan="5" class="no-data">No archived tickets in this window</td>';
     tbody.appendChild(tr);
     return;
   }
 
   rows.forEach((r) => {
-    const { name, email, profileImage, count, latest } = r;
-    const date = latest.toLocaleDateString(undefined, {
+    const { name, email, profileImage, lastSeen, count, latestArchived } = r;
+
+    const archivedDate = latestArchived.toLocaleDateString('en-IN', {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: "Asia/Kolkata"
     });
-    const time = latest.toLocaleTimeString(undefined, {
+    const archivedTime = latestArchived.toLocaleTimeString('en-IN', {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Kolkata"
     });
+
+    let lastSeenTime = "--";
+    if (lastSeen) {
+      const lastSeenDate = new Date(lastSeen);
+      const lastSeenIST = convertToIST(lastSeenDate);
+      lastSeenTime = lastSeenIST.toLocaleTimeString('en-IN', {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Kolkata"
+      });
+    }
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -706,10 +772,59 @@ function renderArchivedTable(rows) {
         </div>
       </td>
       <td class="number">${count}</td>
-      <td>${date}</td>
-      <td>${time}</td>
+      <td>${archivedDate}</td>
+      <td>${archivedTime}</td>
+      <td>${lastSeenTime}</td>
     `;
     tbody.appendChild(tr);
+  });
+}
+
+/**
+ * Render hourly breakdown
+ */
+function renderHourlyBreakdown(hourlyMap) {
+  const container = document.getElementById("archivedHourlyBreakdown");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (hourlyMap.size === 0) {
+    container.innerHTML = '<p class="no-data">No hourly data available</p>';
+    return;
+  }
+
+  // Sort hours
+  const hours = Array.from(hourlyMap.keys()).sort((a, b) => {
+    const hourA = parseInt(a.substring(1));
+    const hourB = parseInt(b.substring(1));
+    return hourA - hourB;
+  });
+
+  hours.forEach(hourKey => {
+    const hour = parseInt(hourKey.substring(1));
+    const agents = hourlyMap.get(hourKey);
+    const totalTickets = Array.from(agents.values()).reduce((sum, a) => sum + a.count, 0);
+
+    const hourSection = document.createElement("div");
+    hourSection.className = "hourly-section";
+
+    let agentsList = "";
+    agents.forEach(agent => {
+      agentsList += `<div class="hourly-agent"><span class="agent-name">${agent.name}</span>: <span class="count">${agent.count}</span></div>`;
+    });
+
+    hourSection.innerHTML = `
+      <div class="hourly-header">
+        <h4>${String(hour).padStart(2, '0')}:00</h4>
+        <span class="hourly-total">${totalTickets} tickets</span>
+      </div>
+      <div class="hourly-agents">
+        ${agentsList}
+      </div>
+    `;
+
+    container.appendChild(hourSection);
   });
 }
 
@@ -721,10 +836,13 @@ async function fetchAndRenderArchived() {
   try {
     const minutes = Number(dom.archivedWindow.value);
     setLoading(true, `Fetching archived tickets (last ${minutes} min)…`);
+
     const tickets = await fetchArchivedTickets(minutes);
-    const map = buildArchivedMap(tickets);
-    const rows = filterArchivedByWindow(map, minutes);
-    renderArchivedTable(rows);
+    const { agentMap, hourlyMap } = processArchivedTickets(tickets, minutes);
+
+    renderArchivedTable(agentMap);
+    renderHourlyBreakdown(hourlyMap);
+
   } catch (err) {
     showError(err.message || "Failed to load archived tickets");
     console.error(err);
