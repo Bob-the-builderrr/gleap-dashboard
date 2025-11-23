@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gleap Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="hero-text">
+        <h1>Support Dashboard</h1>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">
+          Live metrics & ticket management
+        </p>
+      </div>
+      <div class="hero-actions">
+        <div class="view-toggles" style="margin: 0;">
+          <button class="tab-btn active" data-view="allTickets">All Open Tickets</button>
+          <button class="tab-btn" data-view="overview">Team Performance</button>
+          <button class="tab-btn" data-view="shifts">Shifts</button>
+          <button class="tab-btn" data-view="archived">Archived</button>
+        </div>
+        <button id="refreshAllTicketsBtn" class="primary-btn" style="margin-left: 1rem;">Refresh</button>
+      </div>
+    </header>
+
+    <!-- All Tickets View -->
+    <div id="allTicketsView">
+      <!-- Bird's Eye Summary -->
+      <section class="panel">
+        <div class="summary-grid">
+          <article class="card">
+            <p class="card-label">Total Open</p>
+            <p class="card-value" id="totalOpenCount">--</p>
+          </article>
+          <article class="card">
+            <p class="card-label">Base Plan</p>
+            <p class="card-value" id="basePlanCount">--</p>
+          </article>
+          <article class="card">
+            <p class="card-label">Pro Plan</p>
+            <p class="card-value" id="proPlanCount">--</p>
+          </article>
+          <article class="card">
+            <p class="card-label">Trial Plan</p>
+            <p class="card-value" id="trialPlanCount">--</p>
+          </article>
+        </div>
+
+        <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
+          <p class="card-label">Agent Load (Leaderboard)</p>
+          <div id="agentBucketList" class="bucket-list">
+            <span style="color: var(--text-muted); font-style: italic;">Loading...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Compact Table -->
+      <section class="panel" style="padding: 0; overflow: hidden;">
+        <div class="table-wrapper" style="border: none; border-radius: 0;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 80px;">ID</th>
+                <th style="width: 200px;">Agent</th>
+                <th style="width: 80px;">Status</th>
+                <th style="width: 100px;">Plan</th>
+                <th style="width: 140px;">Updated (IST)</th>
+                <th style="width: 100px;">Duration</th>
+                <th>User</th>
+                <th>Tags</th>
+              </tr>
+            </thead>
+            <tbody id="allTicketsTableBody">
+              <tr>
+                <td colspan="8" style="text-align: center; padding: 2rem;">Loading tickets...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Overview View (Hidden by default) -->
+    <div id="overviewView" class="hidden">
+      <section class="panel controls">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+          <div>
+            <label for="startInput">Start (IST)</label>
+            <input type="datetime-local" id="startInput" />
+          </div>
+          <div>
+            <label for="endInput">End (IST)</label>
+            <input type="datetime-local" id="endInput" />
+          </div>
+          <button id="fetchBtn" class="primary-btn" type="button">Fetch Data</button>
+
+          <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+            <button class="ghost-btn" data-hours="1">1h</button>
+            <button class="ghost-btn" data-hours="4">4h</button>
+            <button class="ghost-btn" data-hours="24">24h</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="summary-grid">
+        <article class="card">
+          <p class="card-label">Avg Rating</p>
+          <p class="card-value" id="averageRatingValue">--</p>
+        </article>
+        <article class="card">
+          <p class="card-label">Active Agents</p>
+          <p class="card-value" id="totalAgentsValue">--</p>
+        </article>
+        <article class="card">
+          <p class="card-label">Total Tickets</p>
+          <p class="card-value" id="totalTicketsValue">--</p>
+        </article>
+      </div>
+
+      <section class="panel" style="padding: 0;">
+        <div class="table-wrapper" style="border: none;">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th data-sort="ticket_activity" class="sortable active">Tickets ↓</th>
+                <th data-sort="closed_tickets" class="sortable">Closed</th>
+                <th data-sort="median_reply_seconds" class="sortable">Med. Reply</th>
+                <th data-sort="rating_score" class="sortable">Rating</th>
+                <th data-sort="last_seen_iso" class="sortable">Last Seen</th>
+                <th data-sort="hours_active" class="sortable">Hours</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Hourly Matrix -->
+      <section class="panel hidden" id="hourlySection" style="margin-top: 1rem; padding: 0;">
+        <div class="table-wrapper" style="border: none; overflow-x: auto;">
+          <table class="hourly-table">
+            <thead>
+              <tr id="hourlyMatrixHeader">
+                <th class="sticky-col">Agent</th>
+                <!-- Hours generated by JS -->
+              </tr>
+            </thead>
+            <tbody id="hourlyMatrixBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Shifts View -->
+    <div id="shiftsView" class="hidden">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+        <section class="panel" id="shiftMorning">
+          <h3>Morning Shift <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">05:00 -
+              14:00</span></h3>
+          <div style="margin-top: 1rem;">
+            <table class="shift-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Tickets</th>
+                  <th>Rating</th>
+                </tr>
+              </thead>
+              <tbody id="morningBody"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel" id="shiftNoon">
+          <h3>Noon Shift <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">12:00 -
+              21:00</span></h3>
+          <div style="margin-top: 1rem;">
+            <table class="shift-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Tickets</th>
+                  <th>Rating</th>
+                </tr>
+              </thead>
+              <tbody id="noonBody"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel" id="shiftNight">
+          <h3>Night Shift <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">20:00 -
+              05:00</span></h3>
+          <div style="margin-top: 1rem;">
+            <table class="shift-table">
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Tickets</th>
+                  <th>Rating</th>
+                </tr>
+              </thead>
+              <tbody id="nightBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Archived View -->
+    <div id="archivedView" class="hidden">
+      <section class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2>Archived Tickets</h2>
+          <select id="archivedWindow" style="padding: 0.4rem;">
+            <option value="60">Last 1 hour</option>
+            <option value="120">Last 2 hours</option>
+            <option value="240">Last 4 hours</option>
+          </select>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Count</th>
+                <th>Latest (IST)</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="archivedTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" style="margin-top: 1rem;">
+        <h3>Hourly Breakdown</h3>
+        <div id="archivedHourlyBreakdown" style="margin-top: 1rem;"></div>
+      </section>
+    </div>
+
+  </main>
+
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loader">Loading...</div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+
+</html>
