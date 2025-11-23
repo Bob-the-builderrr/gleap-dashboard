@@ -591,6 +591,10 @@ function setAutoRefresh(enabled) {
  * Fetch archived tickets from Gleap.
  * Fetches fresh data each time with appropriate limit based on time window.
  */
+/**
+ * Fetch archived tickets from Gleap.
+ * Fetches fresh data each time with appropriate limit based on time window.
+ */
 async function fetchArchivedTickets(minutes) {
   // Determine limit based on time window
   let limit = 200; // Default for 30 min and 1 hour
@@ -612,32 +616,25 @@ async function fetchArchivedTickets(minutes) {
 }
 
 /**
- * Convert UTC date to IST
- */
-function convertToIST(utcDate) {
-  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-  return new Date(utcDate.getTime() + istOffset);
-}
-
-/**
- * Get current IST time
- */
-function getCurrentIST() {
-  const now = new Date();
-  return convertToIST(now);
-}
-
-/**
  * Process archived tickets and build data structures
+ * Uses IST Offset (+5:30) logic as requested
  */
 function processArchivedTickets(tickets, minutes) {
-  const nowIST = getCurrentIST();
+  const IST_OFFSET_MINUTES = 330; // +05:30
+  const now = new Date();
+
+  // Convert current time to IST
+  const nowIST = new Date(now.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+
+  // Start window (IST)
   const windowStartIST = new Date(nowIST.getTime() - minutes * 60 * 1000);
 
-  console.log(`Processing archived tickets for window: ${windowStartIST.toISOString()} to ${nowIST.toISOString()}`);
+  console.log(`Current time (IST): ${nowIST.toISOString()}`);
+  console.log(`Window start (IST): ${windowStartIST.toISOString()}`);
 
   const agentMap = new Map();
   const hourlyMap = new Map();
+  let matchedCount = 0;
 
   tickets.forEach((ticket) => {
     // Check if ticket is archived
@@ -650,56 +647,56 @@ function processArchivedTickets(tickets, minutes) {
     const profileImage = user.profileImageUrl || "";
     const lastSeen = user.lastSeen || null;
 
-    // Parse archivedAt timestamp (UTC)
-    const archivedAtUTC = new Date(ticket.archivedAt);
-    if (Number.isNaN(archivedAtUTC.getTime())) return;
+    // Convert archivedAt (UTC) → IST
+    const archivedUTC = new Date(ticket.archivedAt);
+    if (Number.isNaN(archivedUTC.getTime())) return;
 
-    // Convert to IST
-    const archivedAtIST = convertToIST(archivedAtUTC);
+    const archivedIST = new Date(archivedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 
-    // Check if this ticket falls within the time window
-    if (archivedAtIST < windowStartIST || archivedAtIST > nowIST) {
-      return; // Skip tickets outside window
+    // Check if archived IST time falls inside the window
+    if (archivedIST >= windowStartIST && archivedIST <= nowIST) {
+      matchedCount++;
+
+      // Add to agent map
+      if (!agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          name: agentName,
+          email: agentEmail,
+          profileImage,
+          lastSeen,
+          tickets: [],
+          latestArchived: archivedIST // Store IST time for display
+        });
+      }
+
+      const agentData = agentMap.get(agentId);
+      agentData.tickets.push(archivedIST);
+      if (archivedIST > agentData.latestArchived) {
+        agentData.latestArchived = archivedIST;
+      }
+
+      // Add to hourly breakdown
+      const hour = archivedIST.getUTCHours(); // Use getUTCHours because we manually shifted the time to IST
+      const hourKey = `h${hour}`;
+
+      if (!hourlyMap.has(hourKey)) {
+        hourlyMap.set(hourKey, new Map());
+      }
+
+      const hourAgents = hourlyMap.get(hourKey);
+      if (!hourAgents.has(agentId)) {
+        hourAgents.set(agentId, {
+          name: agentName,
+          email: agentEmail,
+          count: 0
+        });
+      }
+
+      hourAgents.get(agentId).count++;
     }
-
-    // Add to agent map
-    if (!agentMap.has(agentId)) {
-      agentMap.set(agentId, {
-        name: agentName,
-        email: agentEmail,
-        profileImage,
-        lastSeen,
-        tickets: [],
-        latestArchived: archivedAtIST
-      });
-    }
-
-    const agentData = agentMap.get(agentId);
-    agentData.tickets.push(archivedAtIST);
-    if (archivedAtIST > agentData.latestArchived) {
-      agentData.latestArchived = archivedAtIST;
-    }
-
-    // Add to hourly breakdown
-    const hour = archivedAtIST.getHours();
-    const hourKey = `h${hour}`;
-
-    if (!hourlyMap.has(hourKey)) {
-      hourlyMap.set(hourKey, new Map());
-    }
-
-    const hourAgents = hourlyMap.get(hourKey);
-    if (!hourAgents.has(agentId)) {
-      hourAgents.set(agentId, {
-        name: agentName,
-        email: agentEmail,
-        count: 0
-      });
-    }
-
-    hourAgents.get(agentId).count++;
   });
 
+  console.log(`Matched ${matchedCount} tickets in window`);
   return { agentMap, hourlyMap };
 }
 
@@ -732,27 +729,17 @@ function renderArchivedTable(agentMap) {
   rows.forEach((r) => {
     const { name, email, profileImage, lastSeen, count, latestArchived } = r;
 
-    const archivedDate = latestArchived.toLocaleDateString('en-IN', {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "Asia/Kolkata"
-    });
-    const archivedTime = latestArchived.toLocaleTimeString('en-IN', {
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Asia/Kolkata"
-    });
+    // latestArchived is already shifted to IST, so we treat it as UTC to format it "as is" or just use string manipulation
+    // But to be safe and simple, let's just format the Date object which holds the "IST time"
+    const archivedDate = latestArchived.toISOString().split('T')[0];
+    const archivedTime = latestArchived.toISOString().split('T')[1].substring(0, 5);
 
     let lastSeenTime = "--";
     if (lastSeen) {
-      const lastSeenDate = new Date(lastSeen);
-      const lastSeenIST = convertToIST(lastSeenDate);
-      lastSeenTime = lastSeenIST.toLocaleTimeString('en-IN', {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Kolkata"
-      });
+      const IST_OFFSET_MINUTES = 330;
+      const lastSeenUTC = new Date(lastSeen);
+      const lastSeenIST = new Date(lastSeenUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+      lastSeenTime = lastSeenIST.toISOString().split('T')[1].substring(0, 5);
     }
 
     const tr = document.createElement("tr");
@@ -928,8 +915,14 @@ function bindEvents() {
 
 function init() {
   bindEvents();
-  const endUtc = new Date();
-  const startUtc = new Date(endUtc.getTime() - 60 * 60 * 1000);
+  // Default to current hour (e.g. 07:00 to 08:00)
+  const now = new Date();
+  const startUtc = new Date(now);
+  startUtc.setMinutes(0, 0, 0); // Start of current hour
+
+  const endUtc = new Date(startUtc);
+  endUtc.setHours(endUtc.getHours() + 1); // End of current hour
+
   setInputsForRange(startUtc, endUtc);
   fetchData(startUtc.toISOString(), endUtc.toISOString());
 }
