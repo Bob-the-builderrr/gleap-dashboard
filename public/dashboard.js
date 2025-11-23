@@ -108,13 +108,23 @@ function istToUtcIso(istDateStr, isEndOfDay = false) {
   return new Date(utcMs).toISOString();
 }
 
-function setInputsForRange(startUtc, endUtc) {
-  dom.startInput.value = toInputValue(startUtc);
-  dom.endInput.value = toInputValue(endUtc);
+function setInputsForRange(startDate, endDate) {
+  dom.startInput.value = toInputValue(startDate);
+  dom.endInput.value = toInputValue(endDate);
 }
 
 function getRangeFromInputs() {
   try {
+    if (!dom.startInput.value || !dom.endInput.value) {
+      // Fallback if inputs are empty
+      const now = new Date();
+      const start = new Date(now);
+      start.setMinutes(0, 0, 0);
+      const end = new Date(start);
+      end.setHours(end.getHours() + 1);
+      setInputsForRange(start, end);
+    }
+
     const startIso = istToUtcIso(dom.startInput.value);
     const endIso = istToUtcIso(dom.endInput.value, true);
     if (new Date(startIso) >= new Date(endIso)) {
@@ -840,11 +850,11 @@ function init() {
 
   // Set default time range (current hour)
   const now = new Date();
-  const startUtc = new Date(now);
-  startUtc.setMinutes(0, 0, 0);
-  const endUtc = new Date(startUtc);
-  endUtc.setHours(endUtc.getHours() + 1);
-  setInputsForRange(startUtc, endUtc);
+  const start = new Date(now);
+  start.setMinutes(0, 0, 0);
+  const end = new Date(start);
+  end.setHours(end.getHours() + 1);
+  setInputsForRange(start, end);
 
   // Initial fetch
   fetchData();
