@@ -67,6 +67,10 @@ const dom = {
   archivedSearch: document.getElementById("archivedSearch"),
   archivedMatrixHeader: document.getElementById("archivedMatrixHeader"),
   archivedMatrixBody: document.getElementById("archivedMatrixBody"),
+  archivedCustomRange: document.getElementById("archivedCustomRange"),
+  archivedStart: document.getElementById("archivedStart"),
+  archivedEnd: document.getElementById("archivedEnd"),
+  archivedFetchBtn: document.getElementById("archivedFetchBtn"),
   ticketModal: document.getElementById("ticketModal"),
   modalContent: document.getElementById("modalContent"),
   modalTitle: document.getElementById("modalTitle")
@@ -76,8 +80,10 @@ const dom = {
 let agentsData = [];
 let shiftsData = null;
 let archivedAgentMap = new Map(); // Store for modal access
+let archivedHourlyMap = new Map(); // Store for matrix sorting
 let sortKey = "ticket_activity";
 let sortDir = "desc";
+let matrixSortDir = "desc"; // For sorting the matrix by Total
 let lastRange = null;
 let autoRefreshTimer = null;
 let currentView = "overview";
@@ -199,9 +205,10 @@ async function fetchTeamPerformance(startIso, endIso) {
   }).filter(Boolean);
 }
 
-async function fetchArchivedTickets(minutes) {
+async function fetchArchivedTickets(minutes, customStart, customEnd) {
   let limit = 200;
-  if (minutes >= 480) limit = 1000;
+  // If > 8 hours (480 mins), use 1000 limit
+  if (minutes >= 480 || customStart) limit = 1000;
   else if (minutes >= 120) limit = 500;
 
   const url = `https://dashapi.gleap.io/v3/tickets?skip=0&limit=${limit}&filter={}&sort=-archivedAt&ignoreArchived=true&isSpam=false&type[]=INQUIRY&archived=true`;
@@ -386,10 +393,20 @@ function renderShiftTable(tbody, agents, roster) {
   });
 }
 
-function processArchivedTickets(tickets, minutes) {
+function processArchivedTickets(tickets, minutes, customStart, customEnd) {
   const now = new Date();
   const nowIST = new Date(now.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
-  const windowStartIST = new Date(nowIST.getTime() - minutes * 60 * 1000);
+
+  let windowStartIST;
+  let windowEndIST = nowIST;
+
+  if (customStart && customEnd) {
+    // Parse custom inputs (which are local time strings) as IST
+    windowStartIST = new Date(customStart);
+    windowEndIST = new Date(customEnd);
+  } else {
+    windowStartIST = new Date(nowIST.getTime() - minutes * 60 * 1000);
+  }
 
   const agentMap = new Map();
   const hourlyMap = new Map();
@@ -416,7 +433,7 @@ function processArchivedTickets(tickets, minutes) {
       archivedAt: archivedIST
     };
 
-    if (archivedIST >= windowStartIST && archivedIST <= nowIST) {
+    if (archivedIST >= windowStartIST && archivedIST <= windowEndIST) {
       if (!agentMap.has(agentId)) {
         agentMap.set(agentId, {
           id: agentId,
@@ -447,7 +464,12 @@ function processArchivedTickets(tickets, minutes) {
 
       const hourAgents = hourlyMap.get(hourKey);
       if (!hourAgents.has(agentId)) {
-        hourAgents.set(agentId, { name: agentName, email: agentEmail, count: 0 });
+        hourAgents.set(agentId, {
+          name: agentName,
+          email: agentEmail,
+          profileImage: profileImage, // Store image for matrix
+          count: 0
+        });
       }
 
       hourAgents.get(agentId).count++;
@@ -517,36 +539,65 @@ function renderArchivedTable(agentMap) {
 }
 
 function renderHourlyBreakdown(hourlyMap) {
+  archivedHourlyMap = hourlyMap; // Save for re-rendering if needed
   const headerRow = dom.archivedMatrixHeader;
   const body = dom.archivedMatrixBody;
 
-  // 1. Render Header (0-23)
+  // 1. Render Header (0-23 + Total)
   let headerHtml = '<th class="sticky-col">Agent</th>';
   for (let i = 0; i < 24; i++) {
     headerHtml += `<th>${String(i).padStart(2, '0')}</th>`;
   }
+  // Add sortable Total column
+  headerHtml += `<th class="sortable" id="matrixTotalHeader" style="cursor: pointer;">Total <span id="matrixSortIndicator">${matrixSortDir === 'desc' ? '↓' : '↑'}</span></th>`;
   headerRow.innerHTML = headerHtml;
 
-  // 2. Get all agents who have data
+  // Add event listener for sorting
+  document.getElementById("matrixTotalHeader").addEventListener("click", () => {
+    matrixSortDir = matrixSortDir === 'desc' ? 'asc' : 'desc';
+    renderHourlyBreakdown(archivedHourlyMap); // Re-render with new sort
+  });
+
+  // 2. Get all agents who have data and calculate totals
   const allAgents = new Map();
   hourlyMap.forEach(hourMap => {
     hourMap.forEach((data, agentId) => {
       if (!allAgents.has(agentId)) {
-        allAgents.set(agentId, data.name);
+        allAgents.set(agentId, {
+          name: data.name,
+          profileImage: data.profileImage,
+          total: 0
+        });
       }
+      allAgents.get(agentId).total += data.count;
     });
   });
 
   if (allAgents.size === 0) {
-    body.innerHTML = '<tr><td colspan="25" class="no-data">No data available</td></tr>';
+    body.innerHTML = '<tr><td colspan="26" class="no-data">No data available</td></tr>';
     return;
   }
 
-  // 3. Render Rows
-  body.innerHTML = "";
-  allAgents.forEach((agentName, agentId) => {
-    let rowHtml = `<td class="sticky-col" style="font-weight: 500;">${agentName}</td>`;
+  // 3. Sort Agents by Total
+  const sortedAgents = Array.from(allAgents.entries()).sort((a, b) => {
+    return matrixSortDir === 'desc' ? b[1].total - a[1].total : a[1].total - b[1].total;
+  });
 
+  // 4. Render Rows
+  body.innerHTML = "";
+  sortedAgents.forEach(([agentId, agentData]) => {
+    // Agent Cell with Avatar
+    let rowHtml = `
+      <td class="sticky-col">
+        <div class="agent" style="gap: 0.5rem;">
+          <div class="avatar ${agentData.profileImage ? "" : "placeholder"}" style="width: 24px; height: 24px; font-size: 0.7rem;">
+            ${agentData.profileImage ? `<img src="${agentData.profileImage}">` : agentData.name.charAt(0)}
+          </div>
+          <span style="font-weight: 500; font-size: 0.75rem;">${agentData.name}</span>
+        </div>
+      </td>`;
+
+    // Hour Cells
     for (let i = 0; i < 24; i++) {
       const hourKey = `h${i}`;
       const hourData = hourlyMap.get(hourKey);
@@ -555,6 +606,9 @@ function renderHourlyBreakdown(hourlyMap) {
       const cellClass = count > 5 ? 'high-data' : (count > 0 ? 'has-data' : '');
       rowHtml += `<td class="${cellClass}">${count || ''}</td>`;
     }
+
+    // Total Cell
+    rowHtml += `<td style="font-weight: 700; background: rgba(59, 130, 246, 0.1);">${agentData.total}</td>`;
 
     const tr = document.createElement("tr");
     tr.innerHTML = rowHtml;
@@ -629,12 +683,32 @@ async function fetchData() {
 }
 
 async function fetchAndRenderArchived() {
-  const minutes = Number(dom.archivedWindow.value);
+  const selection = dom.archivedWindow.value;
+  let minutes = 0;
+  let customStart = null;
+  let customEnd = null;
+
+  // Handle Custom Range Visibility
+  if (selection === "custom") {
+    dom.archivedCustomRange.classList.remove("hidden");
+    // Don't fetch yet, wait for "Go" button
+    return;
+  } else {
+    dom.archivedCustomRange.classList.add("hidden");
+    minutes = Number(selection);
+  }
+
+  // If triggered by "Go" button for custom range
+  if (selection === "custom" && dom.archivedStart.value && dom.archivedEnd.value) {
+    customStart = dom.archivedStart.value;
+    customEnd = dom.archivedEnd.value;
+  }
+
   setLoading(true);
 
   try {
-    const tickets = await fetchArchivedTickets(minutes);
-    const { agentMap, hourlyMap } = processArchivedTickets(tickets, minutes);
+    const tickets = await fetchArchivedTickets(minutes, customStart, customEnd);
+    const { agentMap, hourlyMap } = processArchivedTickets(tickets, minutes, customStart, customEnd);
 
     renderArchivedTable(agentMap);
     renderHourlyBreakdown(hourlyMap);
@@ -666,7 +740,10 @@ function switchView(view) {
     renderShifts();
   } else if (view === "archived") {
     dom.archivedView.classList.remove("hidden");
-    fetchAndRenderArchived();
+    // Only fetch if not custom, or if custom data is ready
+    if (dom.archivedWindow.value !== "custom") {
+      fetchAndRenderArchived();
+    }
   }
 }
 
@@ -677,7 +754,9 @@ function startAutoRefresh() {
   if (dom.autoRefresh.checked && lastRange) {
     autoRefreshTimer = setInterval(() => {
       fetchData();
-      if (currentView === "archived") fetchAndRenderArchived();
+      if (currentView === "archived" && dom.archivedWindow.value !== "custom") {
+        fetchAndRenderArchived();
+      }
     }, AUTO_REFRESH_MS);
   }
 }
@@ -730,6 +809,12 @@ function init() {
   dom.exportBtn.addEventListener("click", exportToCsv);
   dom.autoRefresh.addEventListener("change", () => startAutoRefresh());
   dom.archivedWindow.addEventListener("change", fetchAndRenderArchived);
+  dom.archivedFetchBtn.addEventListener("click", () => {
+    // Force fetch for custom range
+    if (dom.archivedWindow.value === "custom") {
+      fetchAndRenderArchived();
+    }
+  });
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
