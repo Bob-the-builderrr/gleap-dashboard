@@ -65,12 +65,17 @@ const dom = {
   archivedTableBody: document.getElementById("archivedTableBody"),
   archivedWindow: document.getElementById("archivedWindow"),
   archivedSearch: document.getElementById("archivedSearch"),
-  archivedHourlyBreakdown: document.getElementById("archivedHourlyBreakdown")
+  archivedMatrixHeader: document.getElementById("archivedMatrixHeader"),
+  archivedMatrixBody: document.getElementById("archivedMatrixBody"),
+  ticketModal: document.getElementById("ticketModal"),
+  modalContent: document.getElementById("modalContent"),
+  modalTitle: document.getElementById("modalTitle")
 };
 
 // State
 let agentsData = [];
 let shiftsData = null;
+let archivedAgentMap = new Map(); // Store for modal access
 let sortKey = "ticket_activity";
 let sortDir = "desc";
 let lastRange = null;
@@ -404,20 +409,31 @@ function processArchivedTickets(tickets, minutes) {
 
     const archivedIST = new Date(archivedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 
+    // Store full ticket details
+    const ticketDetails = {
+      id: ticket.id,
+      bugId: ticket.bugId,
+      archivedAt: archivedIST
+    };
+
     if (archivedIST >= windowStartIST && archivedIST <= nowIST) {
       if (!agentMap.has(agentId)) {
         agentMap.set(agentId, {
+          id: agentId,
           name: agentName,
           email: agentEmail,
           profileImage,
           lastSeen,
           tickets: [],
+          ticketDetails: [], // Store full details
           latestArchived: archivedIST
         });
       }
 
       const agentData = agentMap.get(agentId);
       agentData.tickets.push(archivedIST);
+      agentData.ticketDetails.push(ticketDetails);
+
       if (archivedIST > agentData.latestArchived) {
         agentData.latestArchived = archivedIST;
       }
@@ -444,8 +460,10 @@ function processArchivedTickets(tickets, minutes) {
 function renderArchivedTable(agentMap) {
   const tbody = dom.archivedTableBody;
   tbody.innerHTML = "";
+  archivedAgentMap = agentMap; // Save for modal
 
   const rows = Array.from(agentMap.values()).map(agent => ({
+    id: agent.id,
     name: agent.name,
     email: agent.email,
     profileImage: agent.profileImage,
@@ -457,7 +475,7 @@ function renderArchivedTable(agentMap) {
   rows.sort((a, b) => b.count - a.count);
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="no-data">No archived tickets in this window</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">No archived tickets in this window</td></tr>';
     return;
   }
 
@@ -488,50 +506,90 @@ function renderArchivedTable(agentMap) {
       <td class="number">${r.count}</td>
       <td>${archivedDate} ${archivedTime}</td>
       <td>${lastSeenTime}</td>
+      <td>
+        <button class="ghost-btn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;" onclick="showTicketModal('${r.id}')">
+          View Tickets
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 function renderHourlyBreakdown(hourlyMap) {
-  const container = dom.archivedHourlyBreakdown;
-  container.innerHTML = "";
+  const headerRow = dom.archivedMatrixHeader;
+  const body = dom.archivedMatrixBody;
 
-  if (hourlyMap.size === 0) {
-    container.innerHTML = '<p class="no-data">No hourly data available</p>';
+  // 1. Render Header (0-23)
+  let headerHtml = '<th class="sticky-col">Agent</th>';
+  for (let i = 0; i < 24; i++) {
+    headerHtml += `<th>${String(i).padStart(2, '0')}</th>`;
+  }
+  headerRow.innerHTML = headerHtml;
+
+  // 2. Get all agents who have data
+  const allAgents = new Map();
+  hourlyMap.forEach(hourMap => {
+    hourMap.forEach((data, agentId) => {
+      if (!allAgents.has(agentId)) {
+        allAgents.set(agentId, data.name);
+      }
+    });
+  });
+
+  if (allAgents.size === 0) {
+    body.innerHTML = '<tr><td colspan="25" class="no-data">No data available</td></tr>';
     return;
   }
 
-  const hours = Array.from(hourlyMap.keys()).sort((a, b) => {
-    const hourA = parseInt(a.substring(1));
-    const hourB = parseInt(b.substring(1));
-    return hourA - hourB;
-  });
+  // 3. Render Rows
+  body.innerHTML = "";
+  allAgents.forEach((agentName, agentId) => {
+    let rowHtml = `<td class="sticky-col" style="font-weight: 500;">${agentName}</td>`;
 
-  hours.forEach(hourKey => {
-    const hour = parseInt(hourKey.substring(1));
-    const agents = hourlyMap.get(hourKey);
-    const totalTickets = Array.from(agents.values()).reduce((sum, a) => sum + a.count, 0);
+    for (let i = 0; i < 24; i++) {
+      const hourKey = `h${i}`;
+      const hourData = hourlyMap.get(hourKey);
+      const count = hourData?.get(agentId)?.count || 0;
 
-    const hourSection = document.createElement("div");
-    hourSection.style.cssText = "background: rgba(59, 130, 246, 0.05); padding: 1rem; border-radius: 8px; margin-bottom: 0.75rem; border: 1px solid var(--border);";
+      const cellClass = count > 5 ? 'high-data' : (count > 0 ? 'has-data' : '');
+      rowHtml += `<td class="${cellClass}">${count || ''}</td>`;
+    }
 
-    let agentsList = "";
-    agents.forEach(agent => {
-      agentsList += `<div style="display: inline-block; margin-right: 1rem; margin-bottom: 0.5rem;"><span style="color: var(--text);">${agent.name}</span>: <span style="color: var(--accent); font-weight: 600;">${agent.count}</span></div>`;
-    });
-
-    hourSection.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-        <h4 style="font-size: 1rem; margin: 0;">${String(hour).padStart(2, '0')}:00</h4>
-        <span style="background: var(--accent); color: white; padding: 0.25rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.875rem;">${totalTickets} tickets</span>
-      </div>
-      <div>${agentsList}</div>
-    `;
-
-    container.appendChild(hourSection);
+    const tr = document.createElement("tr");
+    tr.innerHTML = rowHtml;
+    body.appendChild(tr);
   });
 }
+
+// === MODAL FUNCTIONS ===
+
+window.showTicketModal = function (agentId) {
+  const agent = archivedAgentMap.get(agentId);
+  if (!agent) return;
+
+  dom.modalTitle.textContent = `Archived Tickets - ${agent.name}`;
+  dom.modalContent.innerHTML = "";
+
+  // Sort tickets by time (newest first)
+  const tickets = [...agent.ticketDetails].sort((a, b) => b.archivedAt - a.archivedAt);
+
+  tickets.forEach(t => {
+    const timeStr = t.archivedAt.toISOString().split('T')[1].substring(0, 8); // HH:mm:ss
+    const displayId = t.bugId ? `Bug #${t.bugId}` : `Ticket #${t.id}`;
+    const url = `https://app.gleap.io/projects/${PROJECT_ID}/inquiries/${t.id}`;
+
+    const div = document.createElement("div");
+    div.className = "ticket-list-item";
+    div.innerHTML = `
+      <a href="${url}" target="_blank">${displayId}</a>
+      <span class="ticket-time">${timeStr} (IST)</span>
+    `;
+    dom.modalContent.appendChild(div);
+  });
+
+  dom.ticketModal.classList.remove("hidden");
+};
 
 // === DATA FETCHING ===
 

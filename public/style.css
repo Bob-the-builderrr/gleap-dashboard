@@ -406,3 +406,79 @@ label {
   letter-spacing: 0.05em;
   margin-left: 0.5rem;
 }
+
+/* Hourly Matrix Table */
+.hourly-table {
+  width: 100%;
+  border-collapse: separate;
+  /* Required for sticky to work */
+  border-spacing: 0;
+}
+
+.hourly-table th,
+.hourly-table td {
+  padding: 0.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  font-size: 0.75rem;
+  min-width: 40px;
+}
+
+.hourly-table th.sticky-col,
+.hourly-table td.sticky-col {
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  z-index: 10;
+  text-align: left;
+  min-width: 150px;
+  border-right: 2px solid var(--border);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.hourly-table th {
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+}
+
+.hourly-table td.has-data {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  font-weight: 700;
+}
+
+.hourly-table td.high-data {
+  background: rgba(16, 185, 129, 0.25);
+  color: var(--success);
+}
+
+/* Modal Ticket List */
+.ticket-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+
+.ticket-list-item:hover {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.ticket-list-item a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  font-family: monospace;
+}
+
+.ticket-list-item a:hover {
+  text-decoration: underline;
+}
+
+.ticket-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
