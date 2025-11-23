@@ -85,7 +85,79 @@ const dom = {
   archivedTableBody: document.getElementById("archivedTableBody"),
   archivedSearch: document.getElementById("archivedSearch"),
   archivedWindow: document.getElementById("archivedWindow"),
+  // All Tickets
+  allTicketsView: document.getElementById("allTicketsView"),
+  allTicketsTableBody: document.getElementById("allTicketsTableBody"),
+  refreshAllTicketsBtn: document.getElementById("refreshAllTicketsBtn"),
 };
+
+async function fetchAllTickets() {
+  const tbody = dom.allTicketsTableBody;
+  tbody.innerHTML = '<tr><td colspan="6" class="no-data">Loading tickets...</td></tr>';
+
+  try {
+    const res = await fetch("/api/open-tickets?limit=50");
+    if (!res.ok) throw new Error("Failed to fetch tickets");
+
+    const data = await res.json();
+    const tickets = data.tickets || [];
+
+    tbody.innerHTML = "";
+
+    if (tickets.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">No open tickets found</td></tr>';
+      return;
+    }
+
+    tickets.forEach(ticket => {
+      const user = ticket.processingUser || {};
+      const customer = ticket.session || {};
+      const agentName = user.firstName || "Unassigned";
+      const agentImg = user.profileImageUrl;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <div class="ticket-info">
+            <a href="https://app.gleap.io/projects/${ticket.project}/inquiries/${ticket.id}" target="_blank" class="ticket-link">
+              #${ticket.bugId || ticket.id.slice(-6)}
+            </a>
+            <div class="ticket-title">${ticket.title || "No Title"}</div>
+          </div>
+        </td>
+        <td>
+          <span class="chip status-${ticket.status}">${ticket.status}</span>
+          <span class="chip priority-${ticket.priority}">${ticket.priority}</span>
+        </td>
+        <td>
+          <div class="customer-info">
+            <div class="customer-name">${customer.name || "Unknown"}</div>
+            <div class="customer-email">${customer.email || ""}</div>
+          </div>
+        </td>
+        <td>
+          <div class="agent">
+            <div class="avatar ${agentImg ? "" : "placeholder"}">
+              ${agentImg ? `<img src="${agentImg}" />` : agentName.charAt(0)}
+            </div>
+            <span>${agentName}</span>
+          </div>
+        </td>
+        <td>${new Date(ticket.createdAt).toLocaleString()}</td>
+        <td>
+          <div class="tags">
+            ${(ticket.tags || []).map(tag => `<span class="chip">${tag}</span>`).join("")}
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(err);
+    tbody.innerHTML = `<tr><td colspan="6" class="no-data error">Error: ${err.message}</td></tr>`;
+  }
+}
 
 function toInputValue(date) {
   const local = new Date(date);
@@ -844,27 +916,28 @@ async function fetchAndRenderArchived() {
   }
 }
 
-
 function switchView(view) {
   currentView = view;
   dom.tabBtns.forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === view);
   });
 
+  dom.overviewView.classList.add("hidden");
+  dom.shiftsView.classList.add("hidden");
+  dom.archivedView.classList.add("hidden");
+  if (dom.allTicketsView) dom.allTicketsView.classList.add("hidden");
+
   if (view === "overview") {
     dom.overviewView.classList.remove("hidden");
-    dom.shiftsView.classList.add("hidden");
-    dom.archivedView.classList.add("hidden");
   } else if (view === "shifts") {
-    dom.overviewView.classList.add("hidden");
     dom.shiftsView.classList.remove("hidden");
-    dom.archivedView.classList.add("hidden");
+    renderShifts();
   } else if (view === "archived") {
-    dom.overviewView.classList.add("hidden");
-    dom.shiftsView.classList.add("hidden");
     dom.archivedView.classList.remove("hidden");
-    // Always fetch fresh data when tab is opened
     fetchAndRenderArchived();
+  } else if (view === "allTickets") {
+    if (dom.allTicketsView) dom.allTicketsView.classList.remove("hidden");
+    fetchAllTickets();
   }
 }
 
@@ -910,10 +983,20 @@ function bindEvents() {
     });
   });
 
+  if (dom.refreshAllTicketsBtn) {
+    dom.refreshAllTicketsBtn.addEventListener("click", fetchAllTickets);
+  }
+
   // Archived tickets event listeners
   if (dom.archivedWindow) {
     dom.archivedWindow.addEventListener("change", () => {
       // Fetch fresh data each time window changes
+      fetchAndRenderArchived();
+    });
+  }
+
+  if (dom.archivedSearch) {
+    dom.archivedSearch.addEventListener("input", () => {
       fetchAndRenderArchived();
     });
   }
@@ -930,7 +1013,11 @@ function init() {
   endUtc.setHours(endUtc.getHours() + 1); // End of current hour
 
   setInputsForRange(startUtc, endUtc);
+
+  // Initial Fetch for all tabs
   fetchData(startUtc.toISOString(), endUtc.toISOString());
+  fetchAllTickets();
+  fetchAndRenderArchived();
 }
 
 document.addEventListener("DOMContentLoaded", init);
