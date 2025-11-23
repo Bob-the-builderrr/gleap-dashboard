@@ -2,120 +2,55 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gleap Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
-    rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support Dashboard - Gleap</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <main class="shell">
+    <!-- Header -->
     <header class="hero">
-      <div class="hero-text">
+      <div>
         <h1>Support Dashboard</h1>
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">
-          Live metrics & ticket management <span id="lastUpdated"></span>
+        <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">
+          Real-time ticket monitoring & agent performance <span id="lastUpdated"></span>
         </p>
       </div>
       <div class="hero-actions">
-        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; margin-right: 1rem;">
-          <input type="checkbox" id="autoRefresh" /> Auto Refresh
+        <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">
+          <input type="checkbox" id="autoRefresh"> Auto Refresh (5min)
         </label>
-        <button id="exportBtn" class="ghost-btn">Export CSV</button>
-
-        <div class="view-toggles" style="margin: 0; margin-left: 1rem;">
-          <button class="tab-btn active" data-view="allTickets">All Open Tickets</button>
-          <button class="tab-btn" data-view="overview">Team Performance</button>
+        <button id="exportBtn" class="ghost-btn">📊 Export CSV</button>
+        <div class="view-toggles">
+          <button class="tab-btn active" data-view="overview">Overview</button>
           <button class="tab-btn" data-view="shifts">Shifts</button>
           <button class="tab-btn" data-view="archived">Archived</button>
         </div>
-        <button id="refreshAllTicketsBtn" class="primary-btn" style="margin-left: 1rem;">Refresh</button>
       </div>
     </header>
 
-    <div id="errorBanner" class="hidden"
-      style="background: #fee2e2; color: #991b1b; padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; border: 1px solid #fecaca;">
-    </div>
+    <!-- Error Banner -->
+    <div id="errorBanner" class="hidden"></div>
 
-    <!-- All Tickets View -->
-    <div id="allTicketsView">
-      <!-- Bird's Eye Summary -->
-      <section class="panel">
-        <div class="summary-grid">
-          <article class="card">
-            <p class="card-label">Total Open</p>
-            <p class="card-value" id="totalOpenCount">--</p>
-          </article>
-          <article class="card">
-            <p class="card-label">Base Plan</p>
-            <p class="card-value" id="basePlanCount">--</p>
-          </article>
-          <article class="card">
-            <p class="card-label">Pro Plan</p>
-            <p class="card-value" id="proPlanCount">--</p>
-          </article>
-          <article class="card">
-            <p class="card-label">Trial Plan</p>
-            <p class="card-value" id="trialPlanCount">--</p>
-          </article>
-        </div>
-
-        <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border);">
-          <p class="card-label">Agent Load (Leaderboard)</p>
-          <div id="agentBucketList" class="bucket-list">
-            <span style="color: var(--text-muted); font-style: italic;">Loading...</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Compact Table -->
-      <section class="panel" style="padding: 0; overflow: hidden;">
-        <div class="table-wrapper" style="border: none; border-radius: 0;">
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 80px;">ID</th>
-                <th style="width: 200px;">Agent</th>
-                <th style="width: 80px;">Status</th>
-                <th style="width: 100px;">Plan</th>
-                <th style="width: 140px;">Updated (IST)</th>
-                <th style="width: 100px;">Duration</th>
-                <th>User</th>
-                <th>Tags</th>
-              </tr>
-            </thead>
-            <tbody id="allTicketsTableBody">
-              <tr>
-                <td colspan="8" style="text-align: center; padding: 2rem;">Loading tickets...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-
-    <!-- Overview View (Hidden by default) -->
-    <div id="overviewView" class="hidden">
-      <section class="panel controls">
+    <!-- Overview Section -->
+    <div id="overviewView">
+      <!-- Time Controls -->
+      <section class="controls">
         <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
           <div>
-            <label for="startInput">Start (IST)</label>
-            <input type="datetime-local" id="startInput" />
+            <label for="startInput">Start Time (IST)</label>
+            <input type="datetime-local" id="startInput">
           </div>
           <div>
-            <label for="endInput">End (IST)</label>
-            <input type="datetime-local" id="endInput" />
+            <label for="endInput">End Time (IST)</label>
+            <input type="datetime-local" id="endInput">
           </div>
-          <button id="fetchBtn" class="primary-btn" type="button">Fetch Data</button>
+          <button id="fetchBtn" class="primary-btn">🔄 Fetch Data</button>
 
           <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
-            <input id="agentSearch" type="search" placeholder="Search agent..."
-              style="padding: 0.4rem; border: 1px solid var(--border); border-radius: 4px;" />
+            <input id="agentSearch" type="search" placeholder="🔍 Search agents..." style="width: 200px;">
             <div class="quick-actions">
               <button class="ghost-btn" data-hours="1">1h</button>
               <button class="ghost-btn" data-hours="4">4h</button>
@@ -125,148 +60,174 @@
         </div>
       </section>
 
+      <!-- Summary Cards -->
       <div class="summary-grid">
-        <article class="card">
-          <p class="card-label">Avg Rating</p>
+        <div class="card">
+          <p class="card-label">Average Rating</p>
           <p class="card-value" id="averageRatingValue">--</p>
-        </article>
-        <article class="card">
+        </div>
+        <div class="card">
           <p class="card-label">Active Agents</p>
           <p class="card-value" id="totalAgentsValue">--</p>
-        </article>
-        <article class="card">
+        </div>
+        <div class="card">
           <p class="card-label">Total Tickets</p>
           <p class="card-value" id="totalTicketsValue">--</p>
-        </article>
+        </div>
+        <div class="card">
+          <p class="card-label">Visible Agents</p>
+          <p class="card-value" id="visibleAgentsCount">--</p>
+        </div>
       </div>
 
-      <section class="panel" style="padding: 0;">
+      <!-- Agent Performance Table -->
+      <div class="panel" style="padding: 0;">
         <div class="table-wrapper" style="border: none;">
           <table>
             <thead>
               <tr>
                 <th>Agent</th>
-                <th data-sort="ticket_activity" class="sortable active">Tickets ↓</th>
-                <th data-sort="closed_tickets" class="sortable">Closed</th>
-                <th data-sort="median_reply_seconds" class="sortable">Med. Reply</th>
-                <th data-sort="rating_score" class="sortable">Rating</th>
-                <th data-sort="last_seen_iso" class="sortable">Last Seen</th>
-                <th data-sort="hours_active" class="sortable">Hours</th>
+                <th data-sort="ticket_activity" class="sortable active">Tickets <span class="sort-indicator">↓</span>
+                </th>
+                <th data-sort="closed_tickets" class="sortable">Closed <span class="sort-indicator"></span></th>
+                <th data-sort="median_reply_seconds" class="sortable">Reply Time <span class="sort-indicator"></span>
+                </th>
+                <th data-sort="median_first_reply_seconds" class="sortable">First Reply <span
+                    class="sort-indicator"></span></th>
+                <th data-sort="rating_score" class="sortable">Rating <span class="sort-indicator"></span></th>
+                <th data-sort="last_seen_iso" class="sortable">Last Seen <span class="sort-indicator"></span></th>
+                <th data-sort="hours_active" class="sortable">Hours Active <span class="sort-indicator"></span></th>
               </tr>
             </thead>
-            <tbody id="tableBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Hourly Matrix -->
-      <section class="panel hidden" id="hourlySection" style="margin-top: 1rem; padding: 0;">
-        <div class="table-wrapper" style="border: none; overflow-x: auto;">
-          <table class="hourly-table">
-            <thead>
-              <tr id="hourlyMatrixHeader">
-                <th class="sticky-col">Agent</th>
-                <!-- Hours generated by JS -->
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="8" class="no-data">Select a time range to load data</td>
               </tr>
-            </thead>
-            <tbody id="hourlyMatrixBody"></tbody>
+            </tbody>
           </table>
         </div>
-      </section>
-    </div>
-
-    <!-- Shifts View -->
-    <div id="shiftsView" class="hidden">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
-        <section class="panel" id="shiftMorning">
-          <h3>Morning Shift <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">05:00 -
-              14:00</span></h3>
-          <div style="margin-top: 1rem;">
-            <table class="shift-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Tickets</th>
-                  <th>Rating</th>
-                </tr>
-              </thead>
-              <tbody id="morningBody"></tbody>
-            </table>
-          </div>
-        </section>
-        <section class="panel" id="shiftNoon">
-          <h3>Noon Shift <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">12:00 -
-              21:00</span></h3>
-          <div style="margin-top: 1rem;">
-            <table class="shift-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Tickets</th>
-                  <th>Rating</th>
-                </tr>
-              </thead>
-              <tbody id="noonBody"></tbody>
-            </table>
-          </div>
-        </section>
-        <section class="panel" id="shiftNight">
-          <h3>Night Shift <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">20:00 -
-              05:00</span></h3>
-          <div style="margin-top: 1rem;">
-            <table class="shift-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Tickets</th>
-                  <th>Rating</th>
-                </tr>
-              </thead>
-              <tbody id="nightBody"></tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </div>
 
-    <!-- Archived View -->
+    <!-- Shifts Section -->
+    <div id="shiftsView" class="hidden">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+        <!-- Morning Shift -->
+        <div class="panel">
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌅 Morning Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">05:00 - 14:00</span></h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th class="number">Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="morningBody">
+                <tr>
+                  <td colspan="4" class="no-data">No data</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Noon Shift -->
+        <div class="panel">
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">☀️ Noon Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">12:00 - 21:00</span></h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th class="number">Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="noonBody">
+                <tr>
+                  <td colspan="4" class="no-data">No data</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Night Shift -->
+        <div class="panel">
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌙 Night Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">20:00 - 05:00</span></h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th class="number">Tickets</th>
+                  <th>Rating</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="nightBody">
+                <tr>
+                  <td colspan="4" class="no-data">No data</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Archived Section -->
     <div id="archivedView" class="hidden">
-      <section class="panel">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h2>Archived Tickets</h2>
+      <div class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+          <h2 style="font-size: 1.5rem;">📦 Archived Tickets</h2>
           <div style="display: flex; gap: 0.5rem;">
-            <select id="archivedWindow" style="padding: 0.4rem;">
+            <select id="archivedWindow">
               <option value="60">Last 1 hour</option>
               <option value="120">Last 2 hours</option>
               <option value="240">Last 4 hours</option>
             </select>
-            <input id="archivedSearch" type="search" placeholder="Search archived..."
-              style="padding: 0.4rem; border: 1px solid var(--border); border-radius: 4px;" />
+            <input id="archivedSearch" type="search" placeholder="🔍 Search archived...">
           </div>
         </div>
+
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
                 <th>Agent</th>
-                <th>Count</th>
-                <th>Latest (IST)</th>
+                <th class="number">Count</th>
+                <th>Latest Archived (IST)</th>
                 <th>Last Seen</th>
               </tr>
             </thead>
-            <tbody id="archivedTableBody"></tbody>
+            <tbody id="archivedTableBody">
+              <tr>
+                <td colspan="4" class="no-data">Loading...</td>
+              </tr>
+            </tbody>
           </table>
         </div>
-      </section>
+      </div>
 
-      <section class="panel" style="margin-top: 1rem;">
-        <h3>Hourly Breakdown</h3>
-        <div id="archivedHourlyBreakdown" style="margin-top: 1rem;"></div>
-      </section>
+      <!-- Hourly Breakdown -->
+      <div class="panel">
+        <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">⏰ Hourly Breakdown</h3>
+        <div id="archivedHourlyBreakdown" style="min-height: 100px;">
+          <p class="no-data" style="padding: 2rem !important;">Select a time window to view breakdown</p>
+        </div>
+      </div>
     </div>
-
   </main>
 
+  <!-- Loading Overlay -->
   <div id="loadingOverlay" class="loading-overlay hidden">
     <div class="loader">Loading...</div>
   </div>
