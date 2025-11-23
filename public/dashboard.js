@@ -91,62 +91,169 @@ const dom = {
   refreshAllTicketsBtn: document.getElementById("refreshAllTicketsBtn"),
 };
 
+// ----------------------------------------------------------
+// HELPER 1: Convert UTC timestamp → IST Date object
+// ----------------------------------------------------------
+function utcToISTDate(utcString) {
+  if (!utcString) return null;
+  return new Date(new Date(utcString).getTime() + (5.5 * 60 * 60 * 1000));
+}
+
+// ----------------------------------------------------------
+// HELPER 2: Convert IST Date object → readable string
+// ----------------------------------------------------------
+function formatIST(dateObj) {
+  if (!dateObj) return "";
+  // Format as YYYY-MM-DD HH:mm:ss
+  return dateObj.toISOString().replace("T", " ").substring(0, 19);
+}
+
+// ----------------------------------------------------------
+// HELPER 3: Format duration (ms → text)
+// ----------------------------------------------------------
+function formatDuration(ms) {
+  if (!ms || ms < 0) return "";
+
+  const minutes = Math.floor(ms / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  return `${minutes}m`;
+}
+
 async function fetchAllTickets() {
   const tbody = dom.allTicketsTableBody;
-  tbody.innerHTML = '<tr><td colspan="6" class="no-data">Loading tickets...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="no-data">Loading tickets...</td></tr>';
 
   try {
-    const res = await fetch("/api/open-tickets?limit=50");
+    // Fetch more tickets to ensure we get a good sample, though API pagination might be needed for full accuracy
+    const res = await fetch("/api/open-tickets?limit=100");
     if (!res.ok) throw new Error("Failed to fetch tickets");
 
     const data = await res.json();
     const tickets = data.tickets || [];
 
-    tbody.innerHTML = "";
-
     if (tickets.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="no-data">No open tickets found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="no-data">No open tickets found</td></tr>';
       return;
     }
 
-    tickets.forEach(ticket => {
+    // ----------------------------------------------------------
+    // STEP 1: Build clean rows from tickets
+    // ----------------------------------------------------------
+    const rows = tickets.map(ticket => {
+      // Agent
       const user = ticket.processingUser || {};
-      const customer = ticket.session || {};
-      const agentName = user.firstName || "Unassigned";
+      const agentName = user.firstName
+        ? `${user.firstName} ${user.lastName || ""}`.trim()
+        : "UNASSIGNED";
       const agentImg = user.profileImageUrl;
 
+      // Session details
+      const session = ticket.session || {};
+      const plan = session.plan || "UNKNOWN";
+      const userEmail = session.email || "";
+      const userName = session.name || "Unknown";
+      const tags = ticket.tags || [];
+
+      // Convert timestamps
+      const createdAtIST = utcToISTDate(ticket.createdAt);
+      const updatedAtIST = utcToISTDate(ticket.updatedAt);
+      const latestCommentIST = utcToISTDate(ticket.latestComment?.createdAt);
+
+      // Determine which timestamp to use for duration
+      const referenceDate = latestCommentIST || updatedAtIST || createdAtIST;
+
+      // Current IST time for diff
+      const nowIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+      const durationMs = nowIST - referenceDate;
+      const timeOpen = formatDuration(durationMs);
+
+      return {
+        id: ticket.id,
+        bugId: ticket.bugId,
+        project: ticket.project,
+        title: ticket.title,
+        agentName,
+        agentImg, // Keep image for display
+        status: ticket.status || "",
+        priority: ticket.priority || "",
+        plan,
+        userEmail,
+        userName,
+        updatedAtFormatted: formatIST(updatedAtIST),
+        tags,
+        timeOpenDuration: timeOpen,
+        // For sorting later
+        rawAgentName: agentName
+      };
+    });
+
+    // ----------------------------------------------------------
+    // STEP 2: Count tickets per agent
+    // ----------------------------------------------------------
+    const agentCount = {};
+    rows.forEach(r => {
+      agentCount[r.rawAgentName] = (agentCount[r.rawAgentName] || 0) + 1;
+    });
+
+    // ----------------------------------------------------------
+    // STEP 3: Add Agent_Open_Ticket count to each row
+    // ----------------------------------------------------------
+    const finalRows = rows.map(r => ({
+      ...r,
+      agentOpenTicketCount: agentCount[r.rawAgentName]
+    }));
+
+    // ----------------------------------------------------------
+    // STEP 4: Sort by most overloaded → least overloaded agent
+    // ----------------------------------------------------------
+    finalRows.sort((a, b) => b.agentOpenTicketCount - a.agentOpenTicketCount);
+
+    // ----------------------------------------------------------
+    // STEP 5: Render
+    // ----------------------------------------------------------
+    tbody.innerHTML = "";
+
+    finalRows.forEach(row => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>
           <div class="ticket-info">
-            <a href="https://app.gleap.io/projects/${ticket.project}/inquiries/${ticket.id}" target="_blank" class="ticket-link">
-              #${ticket.bugId || ticket.id.slice(-6)}
+            <a href="https://app.gleap.io/projects/${row.project}/inquiries/${row.id}" target="_blank" class="ticket-link">
+              #${row.bugId || row.id.slice(-6)}
             </a>
-            <div class="ticket-title">${ticket.title || "No Title"}</div>
-          </div>
-        </td>
-        <td>
-          <span class="chip status-${ticket.status}">${ticket.status}</span>
-          <span class="chip priority-${ticket.priority}">${ticket.priority}</span>
-        </td>
-        <td>
-          <div class="customer-info">
-            <div class="customer-name">${customer.name || "Unknown"}</div>
-            <div class="customer-email">${customer.email || ""}</div>
+            <div class="ticket-title">${row.title || "No Title"}</div>
           </div>
         </td>
         <td>
           <div class="agent">
-            <div class="avatar ${agentImg ? "" : "placeholder"}">
-              ${agentImg ? `<img src="${agentImg}" />` : agentName.charAt(0)}
+            <div class="avatar ${row.agentImg ? "" : "placeholder"}">
+              ${row.agentImg ? `<img src="${row.agentImg}" />` : row.agentName.charAt(0)}
             </div>
-            <span>${agentName}</span>
+            <div>
+              <div class="agent-name">${row.agentName}</div>
+              <span class="chip" style="font-size: 0.7em; padding: 2px 6px;">${row.agentOpenTicketCount} Open</span>
+            </div>
           </div>
         </td>
-        <td>${new Date(ticket.createdAt).toLocaleString()}</td>
+        <td>
+          <span class="chip status-${row.status}">${row.status}</span>
+        </td>
+        <td>${row.plan}</td>
+        <td style="font-family: monospace;">${row.updatedAtFormatted}</td>
+        <td style="font-weight: 600; color: var(--warning);">${row.timeOpenDuration}</td>
+        <td>
+          <div class="customer-info">
+            <div class="customer-name">${row.userName}</div>
+            <div class="customer-email">${row.userEmail}</div>
+          </div>
+        </td>
         <td>
           <div class="tags">
-            ${(ticket.tags || []).map(tag => `<span class="chip">${tag}</span>`).join("")}
+            ${row.tags.map(tag => `<span class="chip">${tag}</span>`).join("")}
           </div>
         </td>
       `;
@@ -155,7 +262,7 @@ async function fetchAllTickets() {
 
   } catch (err) {
     console.error(err);
-    tbody.innerHTML = `<tr><td colspan="6" class="no-data error">Error: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="no-data error">Error: ${err.message}</td></tr>`;
   }
 }
 
