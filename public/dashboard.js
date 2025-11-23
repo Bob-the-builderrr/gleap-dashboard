@@ -605,7 +605,7 @@ async function fetchArchivedTickets(minutes) {
     limit = 1000; // 8 hours
   }
 
-  const url = `${ARCHIVED_API_URL}?skip=0&limit=${limit}&filter={}&sort=-archivedAt&ignoreArchived=false&isSpam=false&type[]=INQUIRY&archived=true`;
+  const url = `${ARCHIVED_API_URL}?type=INQUIRY&status=DONE&skip=0&limit=${limit}&filter={}&sort=-archivedAt`;
   const res = await fetch(url, { headers: ARCHIVED_API_HEADERS });
   if (!res.ok) {
     const err = await res.json();
