@@ -89,6 +89,12 @@ const dom = {
   allTicketsView: document.getElementById("allTicketsView"),
   allTicketsTableBody: document.getElementById("allTicketsTableBody"),
   refreshAllTicketsBtn: document.getElementById("refreshAllTicketsBtn"),
+  // All Tickets Summary
+  totalOpenCount: document.getElementById("totalOpenCount"),
+  basePlanCount: document.getElementById("basePlanCount"),
+  proPlanCount: document.getElementById("proPlanCount"),
+  trialPlanCount: document.getElementById("trialPlanCount"),
+  agentBucketList: document.getElementById("agentBucketList"),
 };
 
 // ----------------------------------------------------------
@@ -127,8 +133,9 @@ async function fetchAllTickets() {
   const tbody = dom.allTicketsTableBody;
   tbody.innerHTML = '<tr><td colspan="8" class="no-data">Loading tickets...</td></tr>';
 
+  if (dom.agentBucketList) dom.agentBucketList.innerHTML = '<span style="color: var(--text-muted);">Loading...</span>';
+
   try {
-    // Fetch more tickets to ensure we get a good sample, though API pagination might be needed for full accuracy
     const res = await fetch("/api/open-tickets?limit=100");
     if (!res.ok) throw new Error("Failed to fetch tickets");
 
@@ -137,6 +144,7 @@ async function fetchAllTickets() {
 
     if (tickets.length === 0) {
       tbody.innerHTML = '<tr><td colspan="8" class="no-data">No open tickets found</td></tr>';
+      updateSummaryStats([], {});
       return;
     }
 
@@ -192,7 +200,7 @@ async function fetchAllTickets() {
     });
 
     // ----------------------------------------------------------
-    // STEP 2: Count tickets per agent
+    // STEP 2: Count tickets per agent & Plan Stats
     // ----------------------------------------------------------
     const agentCount = {};
     rows.forEach(r => {
@@ -213,47 +221,46 @@ async function fetchAllTickets() {
     finalRows.sort((a, b) => b.agentOpenTicketCount - a.agentOpenTicketCount);
 
     // ----------------------------------------------------------
-    // STEP 5: Render
+    // STEP 5: Update Summary Stats
+    // ----------------------------------------------------------
+    updateSummaryStats(rows, agentCount);
+
+    // ----------------------------------------------------------
+    // STEP 6: Render Compact Table
     // ----------------------------------------------------------
     tbody.innerHTML = "";
 
     finalRows.forEach(row => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>
-          <div class="ticket-info">
-            <a href="https://app.gleap.io/projects/${row.project}/inquiries/${row.id}" target="_blank" class="ticket-link">
-              #${row.bugId || row.id.slice(-6)}
-            </a>
-            <div class="ticket-title">${row.title || "No Title"}</div>
-          </div>
+        <td class="mono">
+          <a href="https://app.gleap.io/projects/${row.project}/inquiries/${row.id}" target="_blank" class="ticket-link">
+            #${row.bugId || row.id.slice(-6)}
+          </a>
         </td>
         <td>
-          <div class="agent">
-            <div class="avatar ${row.agentImg ? "" : "placeholder"}">
+          <div class="agent-compact">
+            <div class="avatar-small">
               ${row.agentImg ? `<img src="${row.agentImg}" />` : row.agentName.charAt(0)}
             </div>
-            <div>
-              <div class="agent-name">${row.agentName}</div>
-              <span class="chip" style="font-size: 0.7em; padding: 2px 6px;">${row.agentOpenTicketCount} Open</span>
-            </div>
+            <span style="font-weight: 500;">${row.agentName}</span>
+            <span class="chip" style="font-size: 10px; background: #f1f5f9; color: var(--text-muted);">${row.agentOpenTicketCount}</span>
+          </div>
+        </td>
+        <td><span class="chip status-${row.status}">${row.status}</span></td>
+        <td><span style="font-size: 11px; color: var(--text-muted);">${row.plan}</span></td>
+        <td class="mono" style="font-size: 11px;">${row.updatedAtFormatted}</td>
+        <td style="font-weight: 600; color: var(--warning); font-size: 11px;">${row.timeOpenDuration}</td>
+        <td>
+          <div style="line-height: 1.2;">
+            <div style="font-weight: 600; font-size: 12px;">${row.userName}</div>
+            <div style="font-size: 10px; color: var(--text-muted);">${row.userEmail}</div>
           </div>
         </td>
         <td>
-          <span class="chip status-${row.status}">${row.status}</span>
-        </td>
-        <td>${row.plan}</td>
-        <td style="font-family: monospace;">${row.updatedAtFormatted}</td>
-        <td style="font-weight: 600; color: var(--warning);">${row.timeOpenDuration}</td>
-        <td>
-          <div class="customer-info">
-            <div class="customer-name">${row.userName}</div>
-            <div class="customer-email">${row.userEmail}</div>
-          </div>
-        </td>
-        <td>
-          <div class="tags">
-            ${row.tags.map(tag => `<span class="chip">${tag}</span>`).join("")}
+          <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+            ${row.tags.slice(0, 2).map(tag => `<span class="chip" style="background: #f1f5f9; color: var(--text-muted); border: 1px solid #e2e8f0;">${tag}</span>`).join("")}
+            ${row.tags.length > 2 ? `<span class="chip" style="background: #f1f5f9; color: var(--text-muted);">+${row.tags.length - 2}</span>` : ''}
           </div>
         </td>
       `;
@@ -263,6 +270,35 @@ async function fetchAllTickets() {
   } catch (err) {
     console.error(err);
     tbody.innerHTML = `<tr><td colspan="8" class="no-data error">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function updateSummaryStats(rows, agentCount) {
+  // Total Open
+  if (dom.totalOpenCount) dom.totalOpenCount.textContent = rows.length;
+
+  // Plan Breakdown
+  let base = 0, pro = 0, trial = 0;
+  rows.forEach(r => {
+    const p = (r.plan || "").toLowerCase();
+    if (p.includes("base")) base++;
+    else if (p.includes("pro") || p.includes("growth")) pro++; // Assuming growth/pro are similar tiers
+    else if (p.includes("trial")) trial++;
+  });
+
+  if (dom.basePlanCount) dom.basePlanCount.textContent = base;
+  if (dom.proPlanCount) dom.proPlanCount.textContent = pro;
+  if (dom.trialPlanCount) dom.trialPlanCount.textContent = trial;
+
+  // Agent Buckets
+  if (dom.agentBucketList) {
+    const sortedAgents = Object.entries(agentCount).sort((a, b) => b[1] - a[1]);
+    dom.agentBucketList.innerHTML = sortedAgents.map(([name, count]) => `
+      <div class="bucket-item">
+        <span>${name}</span>
+        <span class="bucket-count">${count}</span>
+      </div>
+    `).join("");
   }
 }
 
