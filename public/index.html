@@ -206,26 +206,55 @@
                 <th class="number">Count</th>
                 <th>Latest Archived (IST)</th>
                 <th>Last Seen</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="archivedTableBody">
               <tr>
-                <td colspan="4" class="no-data">Loading...</td>
+                <td colspan="5" class="no-data">Loading...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- Hourly Breakdown -->
+      <!-- Hourly Matrix -->
       <div class="panel">
-        <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">⏰ Hourly Breakdown</h3>
-        <div id="archivedHourlyBreakdown" style="min-height: 100px;">
-          <p class="no-data" style="padding: 2rem !important;">Select a time window to view breakdown</p>
+        <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">⏰ Hourly Archive Matrix (IST)</h3>
+        <div class="table-wrapper" style="overflow-x: auto;">
+          <table class="hourly-table">
+            <thead>
+              <tr id="archivedMatrixHeader">
+                <th class="sticky-col">Agent</th>
+                <!-- Hours 0-23 will be injected here -->
+              </tr>
+            </thead>
+            <tbody id="archivedMatrixBody">
+              <tr>
+                <td colspan="25" class="no-data">Loading matrix...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </main>
+
+  <!-- Ticket List Modal -->
+  <div id="ticketModal" class="loading-overlay hidden" style="background: rgba(10, 14, 26, 0.8);">
+    <div class="panel"
+      style="width: 500px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+        <h3 id="modalTitle" style="font-size: 1.25rem;">Archived Tickets</h3>
+        <button onclick="document.getElementById('ticketModal').classList.add('hidden')" class="ghost-btn"
+          style="padding: 0.25rem 0.5rem;">✕</button>
+      </div>
+      <div id="modalContent" style="overflow-y: auto; flex: 1;">
+        <!-- Ticket links will go here -->
+      </div>
+    </div>
+  </div>
 
   <!-- Loading Overlay -->
   <div id="loadingOverlay" class="loading-overlay hidden">
