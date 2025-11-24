@@ -466,7 +466,6 @@ function processArchivedTickets(tickets, startUtc, endUtc) {
     let type = "Archived";
     let timestampUtc = null;
 
-    // 1) Decide type + timestamp
     if (ticket.archived && ticket.archivedAt) {
       type = "Archived";
       timestampUtc = new Date(ticket.archivedAt);
@@ -474,7 +473,7 @@ function processArchivedTickets(tickets, startUtc, endUtc) {
       type = "Done";
       timestampUtc = new Date(ticket.updatedAt);
     } else {
-      return; // Not relevant
+      return;
     }
 
     if (!timestampUtc || isNaN(timestampUtc.getTime())) return;
@@ -482,21 +481,22 @@ function processArchivedTickets(tickets, startUtc, endUtc) {
     const ticketMs = timestampUtc.getTime();
     if (ticketMs < windowStartMs || ticketMs > windowEndMs) return;
 
-    // 2) Convert UTC → IST for display + hourly bucket
+    // Convert UTC to IST for display
     const timestampIST = new Date(ticketMs + IST_OFFSET_MS);
 
-    // 3) Find agent info
+    // Get Agent Info
     let user = {};
     if (type === "Archived") {
       user = ticket.processingUser || {};
     } else {
-      // Done: use latestComment first, fallback to processingUser
       user = ticket.latestComment || {};
+      // Fallback if latestComment is missing user info
       if (!user.email && ticket.processingUser) user = ticket.processingUser;
     }
 
+    // Use email as the primary ID to ensure consistent grouping between Archived (processingUser) and Done (latestComment)
     const agentId = user.email || user.id || "unknown";
-    const agentName = user.firstName || (user.email ? user.email.split("@")[0] : "Unknown");
+    const agentName = user.firstName || user.email?.split("@")[0] || "Unknown";
     const agentEmail = user.email || "";
     const profileImage = user.profileImageUrl || "";
     const lastSeen = user.lastSeen || null;
@@ -508,7 +508,6 @@ function processArchivedTickets(tickets, startUtc, endUtc) {
       type: type
     };
 
-    // 4) Accumulate per agent
     if (!agentMap.has(agentId)) {
       agentMap.set(agentId, {
         id: agentId,
@@ -530,8 +529,8 @@ function processArchivedTickets(tickets, startUtc, endUtc) {
       agentData.latestTimestamp = timestampIST;
     }
 
-    // 5) Hourly matrix (IST hour)
-    const hour = timestampIST.getHours(); // 0–23 in IST
+    // For hourly matrix, use IST hour
+    const hour = timestampIST.getUTCHours();
     const hourKey = `h${hour}`;
 
     if (!hourlyMap.has(hourKey)) {
