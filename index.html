@@ -34,32 +34,32 @@
     <!-- Error Banner -->
     <div id="errorBanner" class="hidden"></div>
 
-    <!-- Main Time Controls (Shared for Overview & Shifts) -->
-    <section id="mainControls" class="controls">
-      <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
-        <div>
-          <label for="startInput">Start Time (IST)</label>
-          <input type="datetime-local" id="startInput">
-        </div>
-        <div>
-          <label for="endInput">End Time (IST)</label>
-          <input type="datetime-local" id="endInput">
-        </div>
-        <button id="fetchBtn" class="primary-btn">🔄 Fetch Data</button>
-
-        <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
-          <input id="agentSearch" type="search" placeholder="🔍 Search agents..." style="width: 200px;">
-          <div class="quick-actions">
-            <button class="ghost-btn" data-hours="1">1h</button>
-            <button class="ghost-btn" data-hours="4">4h</button>
-            <button class="ghost-btn" data-hours="24">24h</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- Overview Section -->
     <div id="overviewView">
+      <!-- Time Controls -->
+      <section class="controls">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+          <div>
+            <label for="startInput">Start Time (IST)</label>
+            <input type="datetime-local" id="startInput">
+          </div>
+          <div>
+            <label for="endInput">End Time (IST)</label>
+            <input type="datetime-local" id="endInput">
+          </div>
+          <button id="fetchBtn" class="primary-btn">🔄 Fetch Data</button>
+
+          <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
+            <input id="agentSearch" type="search" placeholder="🔍 Search agents..." style="width: 200px;">
+            <div class="quick-actions">
+              <button class="ghost-btn" data-hours="1">1h</button>
+              <button class="ghost-btn" data-hours="4">4h</button>
+              <button class="ghost-btn" data-hours="24">24h</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Summary Cards -->
       <div class="summary-grid">
         <div class="card">
@@ -114,9 +114,8 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
         <!-- Morning Shift -->
         <div class="panel">
-          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌅 Morning <span id="morningTotal"
-              class="chip rating good" style="font-size: 0.75rem; vertical-align: middle; margin: 0 0.5rem;">--</span>
-            <span style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">05:00 - 14:00</span></h3>
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌅 Morning Shift <span
+              style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">05:00 - 14:00</span></h3>
           <div class="table-wrapper">
             <table>
               <thead>
@@ -138,8 +137,7 @@
 
         <!-- Noon Shift -->
         <div class="panel">
-          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">☀️ Noon <span id="noonTotal" class="chip rating good"
-              style="font-size: 0.75rem; vertical-align: middle; margin: 0 0.5rem;">--</span> <span
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">☀️ Noon Shift <span
               style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">12:00 - 21:00</span></h3>
           <div class="table-wrapper">
             <table>
@@ -162,8 +160,7 @@
 
         <!-- Night Shift -->
         <div class="panel">
-          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌙 Night <span id="nightTotal" class="chip rating good"
-              style="font-size: 0.75rem; vertical-align: middle; margin: 0 0.5rem;">--</span> <span
+          <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">🌙 Night Shift <span
               style="font-size: 0.875rem; color: var(--text-muted); font-weight: 400;">20:00 - 05:00</span></h3>
           <div class="table-wrapper">
             <table>

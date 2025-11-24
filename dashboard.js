@@ -73,8 +73,7 @@ const dom = {
   archivedFetchBtn: document.getElementById("archivedFetchBtn"),
   ticketModal: document.getElementById("ticketModal"),
   modalContent: document.getElementById("modalContent"),
-  modalTitle: document.getElementById("modalTitle"),
-  mainControls: document.getElementById("mainControls")
+  modalTitle: document.getElementById("modalTitle")
 };
 
 // State
@@ -89,8 +88,6 @@ let lastRange = null;
 let autoRefreshTimer = null;
 let currentView = "overview";
 
-
-
 // === UTILITY FUNCTIONS ===
 
 function toInputValue(date) {
@@ -102,8 +99,11 @@ function toInputValue(date) {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-function istToUtcIso(istDateStr) {
+function istToUtcIso(istDateStr, isEndOfDay = false) {
   const date = new Date(istDateStr);
+  if (isEndOfDay) {
+    date.setHours(23, 59, 59, 999);
+  }
   const utcMs = date.getTime() - (IST_OFFSET_MINUTES * 60 * 1000);
   return new Date(utcMs).toISOString();
 }
@@ -116,18 +116,17 @@ function setInputsForRange(startDate, endDate) {
 function getRangeFromInputs() {
   try {
     if (!dom.startInput.value || !dom.endInput.value) {
-      // Fallback: Current Hour Block (Rule 1)
+      // Fallback if inputs are empty
       const now = new Date();
       const start = new Date(now);
       start.setMinutes(0, 0, 0);
       const end = new Date(start);
-      end.setMinutes(59, 59, 999);
+      end.setHours(end.getHours() + 1);
       setInputsForRange(start, end);
     }
 
     const startIso = istToUtcIso(dom.startInput.value);
-    const endIso = istToUtcIso(dom.endInput.value);
-
+    const endIso = istToUtcIso(dom.endInput.value, true);
     if (new Date(startIso) >= new Date(endIso)) {
       throw new Error("Start time must be before end time");
     }
@@ -352,12 +351,12 @@ function updateSummaryCards(agents) {
 function renderShifts() {
   if (!shiftsData) return;
 
-  renderShiftTable(dom.morningBody, shiftsData.morning, SHIFTS_ROSTER.morning, "morningTotal");
-  renderShiftTable(dom.noonBody, shiftsData.noon, SHIFTS_ROSTER.noon, "noonTotal");
-  renderShiftTable(dom.nightBody, shiftsData.night, SHIFTS_ROSTER.night, "nightTotal");
+  renderShiftTable(dom.morningBody, shiftsData.morning, SHIFTS_ROSTER.morning);
+  renderShiftTable(dom.noonBody, shiftsData.noon, SHIFTS_ROSTER.noon);
+  renderShiftTable(dom.nightBody, shiftsData.night, SHIFTS_ROSTER.night);
 }
 
-function renderShiftTable(tbody, agents, roster, totalElementId) {
+function renderShiftTable(tbody, agents, roster) {
   tbody.innerHTML = "";
 
   const shiftAgents = agents.filter(a => {
@@ -367,15 +366,6 @@ function renderShiftTable(tbody, agents, roster, totalElementId) {
     const isMember = roster.members.some(m => email === m || name.includes(m));
     return isLeader || isMember;
   });
-
-  // Calculate Total Tickets for this shift
-  const totalTickets = shiftAgents.reduce((sum, agent) => sum + (agent.ticket_activity || 0), 0);
-  const totalEl = document.getElementById(totalElementId);
-  if (totalEl) {
-    totalEl.textContent = `Total: ${totalTickets}`;
-    // Optional: Add color coding based on volume
-    totalEl.className = `chip rating ${totalTickets > 0 ? 'good' : ''}`;
-  }
 
   if (!shiftAgents.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="no-data">No agents active</td></tr>';
@@ -686,7 +676,7 @@ async function fetchData() {
 
     updateSummaryCards(agents);
     renderTable();
-    renderShifts(); // Always update shifts data (totals)
+    if (currentView === "shifts") renderShifts();
 
     updateLastUpdated();
     lastRange = range;
@@ -753,13 +743,6 @@ function switchView(view) {
   dom.shiftsView.classList.add("hidden");
   dom.archivedView.classList.add("hidden");
 
-  // Handle Main Controls Visibility
-  if (view === "overview" || view === "shifts") {
-    dom.mainControls.classList.remove("hidden");
-  } else {
-    dom.mainControls.classList.add("hidden");
-  }
-
   if (view === "overview") {
     dom.overviewView.classList.remove("hidden");
   } else if (view === "shifts") {
@@ -791,9 +774,9 @@ function startAutoRefresh() {
 // === EVENT HANDLERS ===
 
 function handleQuickRange(hours) {
-  const end = new Date(); // Current time (Rule 2/3)
-  const start = new Date(end.getTime() - hours * 60 * 60 * 1000); // Rolling window
-  setInputsForRange(start, end);
+  const endUtc = new Date();
+  const startUtc = new Date(endUtc.getTime() - hours * 60 * 60 * 1000);
+  setInputsForRange(startUtc, endUtc);
   fetchData();
 }
 
@@ -865,12 +848,12 @@ function init() {
     });
   });
 
-  // Set default time range: Current Hour Block (Rule 1)
+  // Set default time range (current hour)
   const now = new Date();
   const start = new Date(now);
-  start.setMinutes(0, 0, 0); // XX:00:00
+  start.setMinutes(0, 0, 0);
   const end = new Date(start);
-  end.setMinutes(59, 59, 999); // XX:59:59
+  end.setHours(end.getHours() + 1);
   setInputsForRange(start, end);
 
   // Initial fetch
