@@ -229,6 +229,20 @@ async function fetchArchivedTickets(minutes, customStart, customEnd) {
   return data.tickets || [];
 }
 
+async function fetchDoneTickets(minutes, customStart, customEnd) {
+  let limit = 200;
+  // If > 8 hours (480 mins), use 1000 limit
+  if (minutes >= 480 || customStart) limit = 1000;
+  else if (minutes >= 120) limit = 500;
+
+  const url = `https://dashapi.gleap.io/v3/tickets?type=INQUIRY&status=DONE&skip=0&limit=${limit}&filter={}&sort=-lastNotification`;
+  const res = await fetch(url, { headers: GLEAP_HEADERS });
+
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.tickets || [];
+}
+
 function formatDuration(rawValue) {
   const seconds = Number(rawValue);
   if (!Number.isFinite(seconds) || seconds <= 0) return "--";
@@ -403,7 +417,7 @@ function renderShiftTable(tbody, agents, roster) {
   });
 }
 
-function processArchivedTickets(tickets, minutes, customStart, customEnd) {
+function processArchivedTickets(archivedTickets, doneTickets, minutes, customStart, customEnd) {
   const now = new Date();
   const nowIST = new Date(now.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 
@@ -421,7 +435,8 @@ function processArchivedTickets(tickets, minutes, customStart, customEnd) {
   const agentMap = new Map();
   const hourlyMap = new Map();
 
-  tickets.forEach(ticket => {
+  // Process ARCHIVED tickets
+  archivedTickets.forEach(ticket => {
     if (!ticket.archived || !ticket.archivedAt) return;
 
     const user = ticket.processingUser || {};
@@ -436,11 +451,12 @@ function processArchivedTickets(tickets, minutes, customStart, customEnd) {
 
     const archivedIST = new Date(archivedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 
-    // Store full ticket details
+    // Store full ticket details with type
     const ticketDetails = {
       id: ticket.id,
       bugId: ticket.bugId,
-      archivedAt: archivedIST
+      timestamp: archivedIST,
+      type: "Archived"
     };
 
     if (archivedIST >= windowStartIST && archivedIST <= windowEndIST) {
@@ -477,7 +493,76 @@ function processArchivedTickets(tickets, minutes, customStart, customEnd) {
         hourAgents.set(agentId, {
           name: agentName,
           email: agentEmail,
-          profileImage: profileImage, // Store image for matrix
+          profileImage: profileImage,
+          count: 0
+        });
+      }
+
+      hourAgents.get(agentId).count++;
+    }
+  });
+
+  // Process DONE tickets
+  doneTickets.forEach(ticket => {
+    if (!ticket.updatedAt) return;
+
+    // For DONE tickets, agent info is in latestComment
+    const user = ticket.latestComment || {};
+    const agentId = user.id || ticket.latestComment?.email || "unknown";
+    const agentName = user.firstName || user.email?.split("@")[0] || "Unknown";
+    const agentEmail = user.email || "";
+    const profileImage = user.profileImageUrl || "";
+    const lastSeen = user.lastSeen || null;
+
+    const updatedUTC = new Date(ticket.updatedAt);
+    if (isNaN(updatedUTC.getTime())) return;
+
+    const updatedIST = new Date(updatedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+
+    // Store full ticket details with type
+    const ticketDetails = {
+      id: ticket.id,
+      bugId: ticket.bugId,
+      timestamp: updatedIST,
+      type: "Done"
+    };
+
+    if (updatedIST >= windowStartIST && updatedIST <= windowEndIST) {
+      if (!agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          id: agentId,
+          name: agentName,
+          email: agentEmail,
+          profileImage,
+          lastSeen,
+          tickets: [],
+          ticketDetails: [],
+          latestArchived: updatedIST
+        });
+      }
+
+      const agentData = agentMap.get(agentId);
+      agentData.tickets.push(updatedIST);
+      agentData.ticketDetails.push(ticketDetails);
+
+      // Update latest timestamp if this is more recent
+      if (updatedIST > agentData.latestArchived) {
+        agentData.latestArchived = updatedIST;
+      }
+
+      const hour = updatedIST.getUTCHours();
+      const hourKey = `h${hour}`;
+
+      if (!hourlyMap.has(hourKey)) {
+        hourlyMap.set(hourKey, new Map());
+      }
+
+      const hourAgents = hourlyMap.get(hourKey);
+      if (!hourAgents.has(agentId)) {
+        hourAgents.set(agentId, {
+          name: agentName,
+          email: agentEmail,
+          profileImage: profileImage,
           count: 0
         });
       }
@@ -636,10 +721,10 @@ window.showTicketModal = function (agentId) {
   dom.modalContent.innerHTML = "";
 
   // Sort tickets by time (newest first)
-  const tickets = [...agent.ticketDetails].sort((a, b) => b.archivedAt - a.archivedAt);
+  const tickets = [...agent.ticketDetails].sort((a, b) => b.timestamp - a.timestamp);
 
   tickets.forEach(t => {
-    const timeStr = t.archivedAt.toISOString().split('T')[1].substring(0, 8); // HH:mm:ss
+    const timeStr = t.timestamp.toISOString().split('T')[1].substring(0, 8); // HH:mm:ss
     const displayId = t.bugId ? `Bug #${t.bugId}` : `Ticket #${t.id}`;
     const url = `https://app.gleap.io/projects/${PROJECT_ID}/inquiries/${t.id}`;
 
@@ -647,7 +732,10 @@ window.showTicketModal = function (agentId) {
     div.className = "ticket-list-item";
     div.innerHTML = `
       <a href="${url}" target="_blank">${displayId}</a>
-      <span class="ticket-time">${timeStr} (IST)</span>
+      <div style="display: flex; gap: 1rem; align-items: center;">
+        <span class="chip" style="font-size: 0.7rem; padding: 0.125rem 0.5rem;">${t.type}</span>
+        <span class="ticket-time">${timeStr} (IST)</span>
+      </div>
     `;
     dom.modalContent.appendChild(div);
   });
@@ -717,8 +805,13 @@ async function fetchAndRenderArchived() {
   setLoading(true);
 
   try {
-    const tickets = await fetchArchivedTickets(minutes, customStart, customEnd);
-    const { agentMap, hourlyMap } = processArchivedTickets(tickets, minutes, customStart, customEnd);
+    // Fetch both archived and done tickets in parallel
+    const [archivedTickets, doneTickets] = await Promise.all([
+      fetchArchivedTickets(minutes, customStart, customEnd),
+      fetchDoneTickets(minutes, customStart, customEnd)
+    ]);
+
+    const { agentMap, hourlyMap } = processArchivedTickets(archivedTickets, doneTickets, minutes, customStart, customEnd);
 
     renderArchivedTable(agentMap);
     renderHourlyBreakdown(hourlyMap);
