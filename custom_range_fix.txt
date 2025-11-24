@@ -1,0 +1,59 @@
+CUSTOM RANGE BUG FIX FOR dashboard.js
+=====================================
+
+LOCATION: Line 740-754 in dashboard.js
+FUNCTION: fetchAndRenderArchived()
+
+PROBLEM:
+--------
+When selection === "custom", the function returns early (line 744).
+The code that sets customStart/customEnd (lines 751-754) comes AFTER the return, so it's unreachable.
+This means clicking "Go" button does nothing!
+
+CURRENT BROKEN CODE (lines 740-754):
+------------------------------------
+  // Handle Custom Range Visibility
+  if (selection === "custom") {
+    dom.archivedCustomRange.classList.remove("hidden");
+    // Don't fetch yet, wait for "Go" button
+    return;  // ❌ BUG: Returns here before checking inputs!
+  } else {
+    dom.archivedCustomRange.classList.add("hidden");
+    minutes = Number(selection);
+  }
+
+  // If triggered by "Go" button for custom range
+  if (selection === "custom" && dom.archivedStart.value && dom.archivedEnd.value) {
+    customStart = dom.archivedStart.value;  // ❌ This code is UNREACHABLE!
+    customEnd = dom.archivedEnd.value;
+  }
+
+
+FIXED CODE (Replace lines 740-754 with this):
+-------------------------------------------
+  // Handle Custom Range
+  if (selection === "custom") {
+    dom.archivedCustomRange.classList.remove("hidden");
+    
+    // Check if custom inputs have values (triggered by Go button)
+    if (dom.archivedStart.value && dom.archivedEnd.value) {
+      customStart = dom.archivedStart.value;
+      customEnd = dom.archivedEnd.value;
+    } else {
+      // Don't fetch yet, wait for user to enter dates and click Go
+      return;  // ✅ Only return if inputs are empty
+    }
+  } else {
+    dom.archivedCustomRange.classList.add("hidden");
+    minutes = Number(selection);
+  }
+
+
+HOW TO APPLY:
+------------
+1. Open dashboard.js
+2. Go to line 740
+3. Select lines 740-754 (entire "Handle Custom Range Visibility" block)
+4. Replace with the "FIXED CODE" above
+5. Save the file
+6. Commit: git add . && git commit -m "fix: Custom range Go button now fetches data correctly" && git push origin main
