@@ -102,11 +102,8 @@ function toInputValue(date) {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-function istToUtcIso(istDateStr, isEndOfDay = false) {
+function istToUtcIso(istDateStr) {
   const date = new Date(istDateStr);
-  if (isEndOfDay) {
-    date.setHours(23, 59, 59, 999);
-  }
   const utcMs = date.getTime() - (IST_OFFSET_MINUTES * 60 * 1000);
   return new Date(utcMs).toISOString();
 }
@@ -119,17 +116,18 @@ function setInputsForRange(startDate, endDate) {
 function getRangeFromInputs() {
   try {
     if (!dom.startInput.value || !dom.endInput.value) {
-      // Fallback if inputs are empty
+      // Fallback: Current Hour Block (Rule 1)
       const now = new Date();
       const start = new Date(now);
       start.setMinutes(0, 0, 0);
       const end = new Date(start);
-      end.setHours(end.getHours() + 1);
+      end.setMinutes(59, 59, 999);
       setInputsForRange(start, end);
     }
 
     const startIso = istToUtcIso(dom.startInput.value);
-    const endIso = istToUtcIso(dom.endInput.value, true);
+    const endIso = istToUtcIso(dom.endInput.value);
+
     if (new Date(startIso) >= new Date(endIso)) {
       throw new Error("Start time must be before end time");
     }
@@ -688,7 +686,7 @@ async function fetchData() {
 
     updateSummaryCards(agents);
     renderTable();
-    if (currentView === "shifts") renderShifts();
+    renderShifts(); // Always update shifts data (totals)
 
     updateLastUpdated();
     lastRange = range;
@@ -793,9 +791,9 @@ function startAutoRefresh() {
 // === EVENT HANDLERS ===
 
 function handleQuickRange(hours) {
-  const endUtc = new Date();
-  const startUtc = new Date(endUtc.getTime() - hours * 60 * 60 * 1000);
-  setInputsForRange(startUtc, endUtc);
+  const end = new Date(); // Current time (Rule 2/3)
+  const start = new Date(end.getTime() - hours * 60 * 60 * 1000); // Rolling window
+  setInputsForRange(start, end);
   fetchData();
 }
 
@@ -867,12 +865,12 @@ function init() {
     });
   });
 
-  // Set default time range (current hour)
+  // Set default time range: Current Hour Block (Rule 1)
   const now = new Date();
   const start = new Date(now);
-  start.setMinutes(0, 0, 0);
+  start.setMinutes(0, 0, 0); // XX:00:00
   const end = new Date(start);
-  end.setHours(end.getHours() + 1);
+  end.setMinutes(59, 59, 999); // XX:59:59
   setInputsForRange(start, end);
 
   // Initial fetch
