@@ -494,7 +494,8 @@ function processArchivedTickets(tickets, startUtc, endUtc) {
       if (!user.email && ticket.processingUser) user = ticket.processingUser;
     }
 
-    const agentId = user.id || user.email || "unknown";
+    // Use email as the primary ID to ensure consistent grouping between Archived (processingUser) and Done (latestComment)
+    const agentId = user.email || user.id || "unknown";
     const agentName = user.firstName || user.email?.split("@")[0] || "Unknown";
     const agentEmail = user.email || "";
     const profileImage = user.profileImageUrl || "";
