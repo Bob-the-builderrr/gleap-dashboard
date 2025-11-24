@@ -66,36 +66,105 @@ const dom = {
   // Updated IDs for Archived View
   archivedStart: document.getElementById("archivedStart"),
   archivedEnd: document.getElementById("archivedEnd"),
-  archivedFetchBtn: document.getElementById("archivedFetchBtn"),
-  archivedSearch: document.getElementById("archivedSearch"),
-  archivedMatrixHeader: document.getElementById("archivedMatrixHeader"),
-  archivedMatrixBody: document.getElementById("archivedMatrixBody"),
-  ticketModal: document.getElementById("ticketModal"),
-  modalContent: document.getElementById("modalContent"),
-  modalTitle: document.getElementById("modalTitle")
-};
+  // Gleap Dashboard - Direct API Calls
+  const GLEAP_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY1MmQ0ZTcwOTY5OGViOGI5NjkwOTY5OSIsImlhdCI6MTc2MjUxNDY4MSwiZXhwIjoxNzY1MTA2NjgxfQ.Q_qrK1At7-Yrt_-gPmjP-U8Xj3GAEpsiX_VzZxYwKYE";
+  const PROJECT_ID = "64d9fa1b014ae7130f2e58d1";
+  const TEAM_ID = "66595e93b58fb2a1e6b8a83f";
+  const IST_OFFSET_MINUTES = 330; // UTC+5:30
+  const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
-// State
-let agentsData = [];
-let shiftsData = null;
-let archivedAgentMap = new Map(); // Store for modal access
-let archivedHourlyMap = new Map(); // Store for matrix sorting
-let sortKey = "ticket_activity";
-let sortDir = "desc";
-let matrixSortDir = "desc"; // For sorting the matrix by Total
-let lastRange = null;
-let autoRefreshTimer = null;
-let currentView = "overview";
+  const GLEAP_HEADERS = {
+    "Authorization": `Bearer ${GLEAP_TOKEN}`,
+    "project": PROJECT_ID,
+    "Accept": "application/json"
+  };
 
-// === UTILITY FUNCTIONS ===
+  const SHIFTS_ROSTER = {
+    morning: {
+      label: "Morning",
+      leader: "pratik@smartlead.ai",
+      members: ["chandra@smartlead.ai"]
+    },
+    noon: {
+      label: "Noon",
+      leader: "vanshree@smartlead.ai",
+      members: [
+        "danielle@smartlead.ai",
+        "hemylyn@smartlead.ai",
+        "jan@smartlead.ai",
+        "elizhabeth@smartlead.ai",
+        "gayathri@smartlead.ai"
+      ]
+    },
+    night: {
+      label: "Night",
+      leader: "evan",
+      members: [
+        "edward@smartlead.ai",
+        "graham@smartlead.ai",
+        "sivaraman@smartlead.ai",
+        "abigail@smartlead.ai"
+      ]
+    }
+  };
 
-function toInputValue(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const h = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${d}T${h}:${min}`;
+  // DOM Elements
+  const dom = {
+    startInput: document.getElementById("startInput"),
+    endInput: document.getElementById("endInput"),
+    fetchBtn: document.getElementById("fetchBtn"),
+    errorBanner: document.getElementById("errorBanner"),
+    lastUpdated: document.getElementById("lastUpdated"),
+    tableBody: document.getElementById("tableBody"),
+    agentSearch: document.getElementById("agentSearch"),
+    totalTicketsValue: document.getElementById("totalTicketsValue"),
+    averageRatingValue: document.getElementById("averageRatingValue"),
+    totalAgentsValue: document.getElementById("totalAgentsValue"),
+    visibleAgentsCount: document.getElementById("visibleAgentsCount"),
+    loadingOverlay: document.getElementById("loadingOverlay"),
+    autoRefresh: document.getElementById("autoRefresh"),
+    exportBtn: document.getElementById("exportBtn"),
+    overviewView: document.getElementById("overviewView"),
+    shiftsView: document.getElementById("shiftsView"),
+    archivedView: document.getElementById("archivedView"),
+    morningBody: document.getElementById("morningBody"),
+    noonBody: document.getElementById("noonBody"),
+    nightBody: document.getElementById("nightBody"),
+    archivedTableBody: document.getElementById("archivedTableBody"),
+    // Updated IDs for Archived View
+    archivedStart: document.getElementById("archivedStart"),
+    archivedEnd: document.getElementById("archivedEnd"),
+    archivedFetchBtn: document.getElementById("archivedFetchBtn"),
+    archivedSearch: document.getElementById("archivedSearch"),
+    archivedMatrixHeader: document.getElementById("archivedMatrixHeader"),
+    archivedMatrixBody: document.getElementById("archivedMatrixBody"),
+    ticketModal: document.getElementById("ticketModal"),
+    modalContent: document.getElementById("modalContent"),
+    modalTitle: document.getElementById("modalTitle"),
+    mainControls: document.getElementById("mainControls")
+  };
+
+  // State
+  let agentsData =[];
+  let shiftsData = null;
+  let archivedAgentMap = new Map(); // Store for modal access
+  let archivedHourlyMap = new Map(); // Store for matrix sorting
+  let sortKey = "ticket_activity";
+  let sortDir = "desc";
+  let matrixSortDir = "desc"; // For sorting the matrix by Total
+  let lastRange = null;
+  let autoRefreshTimer = null;
+  let currentView = "overview";
+
+  // === UTILITY FUNCTIONS ===
+
+  function toInputValue(date) {
+    const y = date.getFullYear();
+const m = String(date.getMonth() + 1).padStart(2, "0");
+const d = String(date.getDate()).padStart(2, "0");
+const h = String(date.getHours()).padStart(2, "0");
+const min = String(date.getMinutes()).padStart(2, "0");
+return `${y}-${m}-${d}T${h}:${min}`;
 }
 
 /**
@@ -394,30 +463,34 @@ function updateSummaryCards(agents) {
 function renderShifts() {
   if (!shiftsData) return;
 
-  renderShiftTable(dom.morningBody, shiftsData.morning, SHIFTS_ROSTER.morning);
-  renderShiftTable(dom.noonBody, shiftsData.noon, SHIFTS_ROSTER.noon);
-  renderShiftTable(dom.nightBody, shiftsData.night, SHIFTS_ROSTER.night);
+  const searchTerm = dom.agentSearch.value.trim().toLowerCase();
+
+  const filterAgentsForShift = (agents, roster) => {
+    return agents.filter(a => {
+      const email = (a.agent_email || "").toLowerCase();
+      const name = (a.agent_name || "").toLowerCase();
+      const isLeader = email === roster.leader || name.includes(roster.leader);
+      const isMember = roster.members.some(m => email === m || name.includes(m));
+      return (isLeader || isMember) && (name.includes(searchTerm) || email.includes(searchTerm));
+    });
+  };
+
+  renderShiftTable(dom.morningBody, filterAgentsForShift(shiftsData.morning, SHIFTS_ROSTER.morning), SHIFTS_ROSTER.morning);
+  renderShiftTable(dom.noonBody, filterAgentsForShift(shiftsData.noon, SHIFTS_ROSTER.noon), SHIFTS_ROSTER.noon);
+  renderShiftTable(dom.nightBody, filterAgentsForShift(shiftsData.night, SHIFTS_ROSTER.night), SHIFTS_ROSTER.night);
 }
 
 function renderShiftTable(tbody, agents, roster) {
   tbody.innerHTML = "";
 
-  const shiftAgents = agents.filter(a => {
-    const email = (a.agent_email || "").toLowerCase();
-    const name = (a.agent_name || "").toLowerCase();
-    const isLeader = email === roster.leader || name.includes(roster.leader);
-    const isMember = roster.members.some(m => email === m || name.includes(m));
-    return isLeader || isMember;
-  });
-
-  if (!shiftAgents.length) {
+  if (!agents.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="no-data">No agents active</td></tr>';
     return;
   }
 
-  shiftAgents.sort((a, b) => (b.ticket_activity || 0) - (a.ticket_activity || 0));
+  agents.sort((a, b) => (b.ticket_activity || 0) - (a.ticket_activity || 0));
 
-  shiftAgents.forEach(agent => {
+  agents.forEach(agent => {
     const email = (agent.agent_email || "").toLowerCase();
     const name = (agent.agent_name || "").toLowerCase();
     const isLeader = email === roster.leader || name.includes(roster.leader);
@@ -848,6 +921,13 @@ function switchView(view) {
   dom.shiftsView.classList.add("hidden");
   dom.archivedView.classList.add("hidden");
 
+  // Toggle shared controls
+  if (view === "overview" || view === "shifts") {
+    dom.mainControls.classList.remove("hidden");
+  } else {
+    dom.mainControls.classList.add("hidden");
+  }
+
   if (view === "overview") {
     dom.overviewView.classList.remove("hidden");
   } else if (view === "shifts") {
@@ -925,7 +1005,16 @@ function init() {
   dom.archivedFetchBtn.addEventListener("click", fetchAndRenderArchived);
   dom.autoRefresh.addEventListener("change", startAutoRefresh);
   dom.exportBtn.addEventListener("click", exportToCsv);
-  dom.agentSearch.addEventListener("input", renderTable);
+
+  // Update search listener to handle both views
+  dom.agentSearch.addEventListener("input", () => {
+    if (currentView === 'shifts') {
+      renderShifts();
+    } else {
+      renderTable();
+    }
+  });
+
   dom.archivedSearch.addEventListener("input", () => renderArchivedTable(archivedAgentMap));
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
