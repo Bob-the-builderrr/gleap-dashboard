@@ -1,0 +1,67 @@
+    <!-- Archived Section -->
+    <div id="archivedView" class="hidden">
+      <!-- Time Controls -->
+      <section class="controls">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+          <div>
+            <label for="archivedStartInput">Start Time (IST)</label>
+            <input type="datetime-local" id="archivedStartInput">
+          </div>
+          <div>
+            <label for="archivedEndInput">End Time (IST)</label>
+            <input type="datetime-local" id="archivedEndInput">
+          </div>
+          <button id="archivedFetchBtn" class="primary-btn">🔄 Fetch Data</button>
+
+          <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
+            <input id="archivedSearch" type="search" placeholder="🔍 Search archived..." style="width: 200px;">
+            <div class="quick-actions">
+              <button class="ghost-btn" data-archived-hours="1">1h</button>
+              <button class="ghost-btn" data-archived-hours="4">4h</button>
+              <button class="ghost-btn" data-archived-hours="24">24h</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="panel" style="padding: 0;">
+        <div class="table-wrapper" style="border: none;">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th class="number">Count</th>
+                <th>Latest Archived (IST)</th>
+                <th>Last Seen</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="archivedTableBody">
+              <tr>
+                <td colspan="5" class="no-data">Select a time range to load data</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Hourly Matrix -->
+      <div class="panel">
+        <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">⏰ Hourly Archive Matrix (IST)</h3>
+        <div class="table-wrapper" style="overflow-x: auto;">
+          <table class="hourly-table">
+            <thead>
+              <tr id="archivedMatrixHeader">
+                <th class="sticky-col">Agent</th>
+                <!-- Hours 0-23 will be injected here -->
+              </tr>
+            </thead>
+            <tbody id="archivedMatrixBody">
+              <tr>
+                <td colspan="25" class="no-data">Select a time range to load data</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>

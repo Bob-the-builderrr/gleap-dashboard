@@ -63,14 +63,13 @@ const dom = {
   noonBody: document.getElementById("noonBody"),
   nightBody: document.getElementById("nightBody"),
   archivedTableBody: document.getElementById("archivedTableBody"),
-  archivedWindow: document.getElementById("archivedWindow"),
-  archivedSearch: document.getElementById("archivedSearch"),
-  archivedMatrixHeader: document.getElementById("archivedMatrixHeader"),
-  archivedMatrixBody: document.getElementById("archivedMatrixBody"),
-  archivedCustomRange: document.getElementById("archivedCustomRange"),
+  // Updated IDs for Archived View
   archivedStart: document.getElementById("archivedStart"),
   archivedEnd: document.getElementById("archivedEnd"),
   archivedFetchBtn: document.getElementById("archivedFetchBtn"),
+  archivedSearch: document.getElementById("archivedSearch"),
+  archivedMatrixHeader: document.getElementById("archivedMatrixHeader"),
+  archivedMatrixBody: document.getElementById("archivedMatrixBody"),
   ticketModal: document.getElementById("ticketModal"),
   modalContent: document.getElementById("modalContent"),
   modalTitle: document.getElementById("modalTitle")
@@ -99,13 +98,36 @@ function toInputValue(date) {
   return `${y}-${m}-${d}T${h}:${min}`;
 }
 
-function istToUtcIso(istDateStr, isEndOfDay = false) {
-  const date = new Date(istDateStr);
+/**
+ * Converts IST datetime string to UTC ISO string
+ * IST = UTC + 5:30, so UTC = IST - 5:30
+ */
+function istToUtcIso(istDatetimeString, isEndOfDay = false) {
+  const istDate = new Date(istDatetimeString);
   if (isEndOfDay) {
-    date.setHours(23, 59, 59, 999);
+    istDate.setHours(23, 59, 59, 999);
   }
-  const utcMs = date.getTime() - (IST_OFFSET_MINUTES * 60 * 1000);
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const utcMs = istDate.getTime() - IST_OFFSET_MS;
   return new Date(utcMs).toISOString();
+}
+
+/**
+ * Gets the last 24-hour window in IST, returns UTC ISO strings for API
+ */
+function getLast24HoursUtc() {
+  const nowIST = new Date(); // Current IST time (browser assumes IST)
+  const endIST = new Date(nowIST.getTime() - 1);
+  const startIST = new Date(nowIST.getTime() - 24 * 60 * 60 * 1000);
+
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const startUtcMs = startIST.getTime() - IST_OFFSET_MS;
+  const endUtcMs = endIST.getTime() - IST_OFFSET_MS;
+
+  return {
+    startUtc: new Date(startUtcMs).toISOString(),
+    endUtc: new Date(endUtcMs).toISOString()
+  };
 }
 
 function setInputsForRange(startDate, endDate) {
@@ -116,7 +138,6 @@ function setInputsForRange(startDate, endDate) {
 function getRangeFromInputs() {
   try {
     if (!dom.startInput.value || !dom.endInput.value) {
-      // Fallback if inputs are empty
       const now = new Date();
       const start = new Date(now);
       start.setMinutes(0, 0, 0);
@@ -149,6 +170,7 @@ function clearError() {
 function setLoading(state) {
   dom.loadingOverlay.classList.toggle("hidden", !state);
   if (dom.fetchBtn) dom.fetchBtn.disabled = state;
+  if (dom.archivedFetchBtn) dom.archivedFetchBtn.disabled = state;
 }
 
 function updateLastUpdated() {
@@ -215,32 +237,46 @@ async function fetchTeamPerformance(startIso, endIso) {
   }).filter(Boolean);
 }
 
-async function fetchArchivedTickets(minutes, customStart, customEnd) {
-  let limit = 200;
-  // If > 8 hours (480 mins), use 1000 limit
-  if (minutes >= 480 || customStart) limit = 1000;
-  else if (minutes >= 120) limit = 500;
-
+async function fetchArchivedTickets(startUtc, endUtc) {
+  const limit = 1000;
   const url = `https://dashapi.gleap.io/v3/tickets?skip=0&limit=${limit}&filter={}&sort=-archivedAt&ignoreArchived=true&isSpam=false&type[]=INQUIRY&archived=true`;
-  const res = await fetch(url, { headers: GLEAP_HEADERS });
 
+  const res = await fetch(url, { headers: GLEAP_HEADERS });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
+
   const data = await res.json();
-  return data.tickets || [];
+  const tickets = data.tickets || [];
+
+  // Filter by UTC time range
+  const startMs = new Date(startUtc).getTime();
+  const endMs = new Date(endUtc).getTime();
+
+  return tickets.filter(t => {
+    if (!t.archivedAt) return false;
+    const ticketMs = new Date(t.archivedAt).getTime();
+    return ticketMs >= startMs && ticketMs <= endMs;
+  });
 }
 
-async function fetchDoneTickets(minutes, customStart, customEnd) {
-  let limit = 200;
-  // If > 8 hours (480 mins), use 1000 limit
-  if (minutes >= 480 || customStart) limit = 1000;
-  else if (minutes >= 120) limit = 500;
-
+async function fetchDoneTickets(startUtc, endUtc) {
+  const limit = 1000;
   const url = `https://dashapi.gleap.io/v3/tickets?type=INQUIRY&status=DONE&skip=0&limit=${limit}&filter={}&sort=-lastNotification`;
-  const res = await fetch(url, { headers: GLEAP_HEADERS });
 
+  const res = await fetch(url, { headers: GLEAP_HEADERS });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
+
   const data = await res.json();
-  return data.tickets || [];
+  const tickets = data.tickets || [];
+
+  // Filter by UTC time range
+  const startMs = new Date(startUtc).getTime();
+  const endMs = new Date(endUtc).getTime();
+
+  return tickets.filter(t => {
+    if (!t.updatedAt) return false;
+    const ticketMs = new Date(t.updatedAt).getTime();
+    return ticketMs >= startMs && ticketMs <= endMs;
+  });
 }
 
 function formatDuration(rawValue) {
@@ -417,158 +453,100 @@ function renderShiftTable(tbody, agents, roster) {
   });
 }
 
-function processArchivedTickets(archivedTickets, doneTickets, minutes, customStart, customEnd) {
-  const now = new Date();
-  const nowIST = new Date(now.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+function processArchivedTickets(tickets, startUtc, endUtc) {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-  let windowStartIST;
-  let windowEndIST = nowIST;
-
-  if (customStart && customEnd) {
-    // Parse custom inputs (which are local time strings) as IST
-    windowStartIST = new Date(customStart);
-    windowEndIST = new Date(customEnd);
-  } else {
-    windowStartIST = new Date(nowIST.getTime() - minutes * 60 * 1000);
-  }
+  const windowStartMs = new Date(startUtc).getTime();
+  const windowEndMs = new Date(endUtc).getTime();
 
   const agentMap = new Map();
   const hourlyMap = new Map();
 
-  // Process ARCHIVED tickets
-  archivedTickets.forEach(ticket => {
-    if (!ticket.archived || !ticket.archivedAt) return;
+  tickets.forEach(ticket => {
+    let type = "Archived";
+    let timestampUtc = null;
 
-    const user = ticket.processingUser || {};
-    const agentId = user.id || "unknown";
+    if (ticket.archived && ticket.archivedAt) {
+      type = "Archived";
+      timestampUtc = new Date(ticket.archivedAt);
+    } else if (ticket.status === "DONE" && ticket.updatedAt) {
+      type = "Done";
+      timestampUtc = new Date(ticket.updatedAt);
+    } else {
+      return;
+    }
+
+    if (!timestampUtc || isNaN(timestampUtc.getTime())) return;
+
+    const ticketMs = timestampUtc.getTime();
+    if (ticketMs < windowStartMs || ticketMs > windowEndMs) return;
+
+    // Convert UTC to IST for display
+    const timestampIST = new Date(ticketMs + IST_OFFSET_MS);
+
+    // Get Agent Info
+    let user = {};
+    if (type === "Archived") {
+      user = ticket.processingUser || {};
+    } else {
+      user = ticket.latestComment || {};
+      // Fallback if latestComment is missing user info
+      if (!user.email && ticket.processingUser) user = ticket.processingUser;
+    }
+
+    const agentId = user.id || user.email || "unknown";
     const agentName = user.firstName || user.email?.split("@")[0] || "Unknown";
     const agentEmail = user.email || "";
     const profileImage = user.profileImageUrl || "";
     const lastSeen = user.lastSeen || null;
 
-    const archivedUTC = new Date(ticket.archivedAt);
-    if (isNaN(archivedUTC.getTime())) return;
-
-    const archivedIST = new Date(archivedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
-
-    // Store full ticket details with type
     const ticketDetails = {
       id: ticket.id,
       bugId: ticket.bugId,
-      timestamp: archivedIST,
-      type: "Archived"
+      timestamp: timestampIST,
+      type: type
     };
 
-    if (archivedIST >= windowStartIST && archivedIST <= windowEndIST) {
-      if (!agentMap.has(agentId)) {
-        agentMap.set(agentId, {
-          id: agentId,
-          name: agentName,
-          email: agentEmail,
-          profileImage,
-          lastSeen,
-          tickets: [],
-          ticketDetails: [], // Store full details
-          latestArchived: archivedIST
-        });
-      }
-
-      const agentData = agentMap.get(agentId);
-      agentData.tickets.push(archivedIST);
-      agentData.ticketDetails.push(ticketDetails);
-
-      if (archivedIST > agentData.latestArchived) {
-        agentData.latestArchived = archivedIST;
-      }
-
-      const hour = archivedIST.getUTCHours();
-      const hourKey = `h${hour}`;
-
-      if (!hourlyMap.has(hourKey)) {
-        hourlyMap.set(hourKey, new Map());
-      }
-
-      const hourAgents = hourlyMap.get(hourKey);
-      if (!hourAgents.has(agentId)) {
-        hourAgents.set(agentId, {
-          name: agentName,
-          email: agentEmail,
-          profileImage: profileImage,
-          count: 0
-        });
-      }
-
-      hourAgents.get(agentId).count++;
+    if (!agentMap.has(agentId)) {
+      agentMap.set(agentId, {
+        id: agentId,
+        name: agentName,
+        email: agentEmail,
+        profileImage,
+        lastSeen,
+        tickets: [],
+        ticketDetails: [],
+        latestTimestamp: timestampIST
+      });
     }
-  });
 
-  // Process DONE tickets
-  doneTickets.forEach(ticket => {
-    if (!ticket.updatedAt) return;
+    const agentData = agentMap.get(agentId);
+    agentData.tickets.push(timestampIST);
+    agentData.ticketDetails.push(ticketDetails);
 
-    // For DONE tickets, agent info is in latestComment
-    const user = ticket.latestComment || {};
-    const agentId = user.id || ticket.latestComment?.email || "unknown";
-    const agentName = user.firstName || user.email?.split("@")[0] || "Unknown";
-    const agentEmail = user.email || "";
-    const profileImage = user.profileImageUrl || "";
-    const lastSeen = user.lastSeen || null;
-
-    const updatedUTC = new Date(ticket.updatedAt);
-    if (isNaN(updatedUTC.getTime())) return;
-
-    const updatedIST = new Date(updatedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
-
-    // Store full ticket details with type
-    const ticketDetails = {
-      id: ticket.id,
-      bugId: ticket.bugId,
-      timestamp: updatedIST,
-      type: "Done"
-    };
-
-    if (updatedIST >= windowStartIST && updatedIST <= windowEndIST) {
-      if (!agentMap.has(agentId)) {
-        agentMap.set(agentId, {
-          id: agentId,
-          name: agentName,
-          email: agentEmail,
-          profileImage,
-          lastSeen,
-          tickets: [],
-          ticketDetails: [],
-          latestArchived: updatedIST
-        });
-      }
-
-      const agentData = agentMap.get(agentId);
-      agentData.tickets.push(updatedIST);
-      agentData.ticketDetails.push(ticketDetails);
-
-      // Update latest timestamp if this is more recent
-      if (updatedIST > agentData.latestArchived) {
-        agentData.latestArchived = updatedIST;
-      }
-
-      const hour = updatedIST.getUTCHours();
-      const hourKey = `h${hour}`;
-
-      if (!hourlyMap.has(hourKey)) {
-        hourlyMap.set(hourKey, new Map());
-      }
-
-      const hourAgents = hourlyMap.get(hourKey);
-      if (!hourAgents.has(agentId)) {
-        hourAgents.set(agentId, {
-          name: agentName,
-          email: agentEmail,
-          profileImage: profileImage,
-          count: 0
-        });
-      }
-
-      hourAgents.get(agentId).count++;
+    if (timestampIST > agentData.latestTimestamp) {
+      agentData.latestTimestamp = timestampIST;
     }
+
+    // For hourly matrix, use IST hour
+    const hour = timestampIST.getUTCHours();
+    const hourKey = `h${hour}`;
+
+    if (!hourlyMap.has(hourKey)) {
+      hourlyMap.set(hourKey, new Map());
+    }
+
+    const hourAgents = hourlyMap.get(hourKey);
+    if (!hourAgents.has(agentId)) {
+      hourAgents.set(agentId, {
+        name: agentName,
+        email: agentEmail,
+        profileImage: profileImage,
+        count: 0
+      });
+    }
+
+    hourAgents.get(agentId).count++;
   });
 
   return { agentMap, hourlyMap };
@@ -586,7 +564,7 @@ function renderArchivedTable(agentMap) {
     profileImage: agent.profileImage,
     lastSeen: agent.lastSeen,
     count: agent.tickets.length,
-    latestArchived: agent.latestArchived
+    latestTimestamp: agent.latestTimestamp
   }));
 
   rows.sort((a, b) => b.count - a.count);
@@ -597,8 +575,8 @@ function renderArchivedTable(agentMap) {
   }
 
   rows.forEach(r => {
-    const archivedDate = r.latestArchived.toISOString().split('T')[0];
-    const archivedTime = r.latestArchived.toISOString().split('T')[1].substring(0, 5);
+    const archivedDate = r.latestTimestamp.toISOString().split('T')[0];
+    const archivedTime = r.latestTimestamp.toISOString().split('T')[1].substring(0, 5);
 
     let lastSeenTime = "--";
     if (r.lastSeen) {
@@ -643,15 +621,17 @@ function renderHourlyBreakdown(hourlyMap) {
   for (let i = 0; i < 24; i++) {
     headerHtml += `<th>${String(i).padStart(2, '0')}</th>`;
   }
-  // Add sortable Total column
   headerHtml += `<th class="sortable" id="matrixTotalHeader" style="cursor: pointer;">Total <span id="matrixSortIndicator">${matrixSortDir === 'desc' ? '↓' : '↑'}</span></th>`;
   headerRow.innerHTML = headerHtml;
 
   // Add event listener for sorting
-  document.getElementById("matrixTotalHeader").addEventListener("click", () => {
-    matrixSortDir = matrixSortDir === 'desc' ? 'asc' : 'desc';
-    renderHourlyBreakdown(archivedHourlyMap); // Re-render with new sort
-  });
+  const totalHeader = document.getElementById("matrixTotalHeader");
+  if (totalHeader) {
+    totalHeader.addEventListener("click", () => {
+      matrixSortDir = matrixSortDir === 'desc' ? 'asc' : 'desc';
+      renderHourlyBreakdown(archivedHourlyMap);
+    });
+  }
 
   // 2. Get all agents who have data and calculate totals
   const allAgents = new Map();
@@ -681,7 +661,6 @@ function renderHourlyBreakdown(hourlyMap) {
   // 4. Render Rows
   body.innerHTML = "";
   sortedAgents.forEach(([agentId, agentData]) => {
-    // Agent Cell with Avatar
     let rowHtml = `
       <td class="sticky-col">
         <div class="agent" style="gap: 0.5rem;">
@@ -692,17 +671,14 @@ function renderHourlyBreakdown(hourlyMap) {
         </div>
       </td>`;
 
-    // Hour Cells
     for (let i = 0; i < 24; i++) {
       const hourKey = `h${i}`;
       const hourData = hourlyMap.get(hourKey);
       const count = hourData?.get(agentId)?.count || 0;
-
       const cellClass = count > 5 ? 'high-data' : (count > 0 ? 'has-data' : '');
       rowHtml += `<td class="${cellClass}">${count || ''}</td>`;
     }
 
-    // Total Cell
     rowHtml += `<td style="font-weight: 700; background: rgba(59, 130, 246, 0.1);">${agentData.total}</td>`;
 
     const tr = document.createElement("tr");
@@ -711,8 +687,6 @@ function renderHourlyBreakdown(hourlyMap) {
   });
 }
 
-// === MODAL FUNCTIONS ===
-
 window.showTicketModal = function (agentId) {
   const agent = archivedAgentMap.get(agentId);
   if (!agent) return;
@@ -720,11 +694,10 @@ window.showTicketModal = function (agentId) {
   dom.modalTitle.textContent = `Archived Tickets - ${agent.name}`;
   dom.modalContent.innerHTML = "";
 
-  // Sort tickets by time (newest first)
   const tickets = [...agent.ticketDetails].sort((a, b) => b.timestamp - a.timestamp);
 
   tickets.forEach(t => {
-    const timeStr = t.timestamp.toISOString().split('T')[1].substring(0, 8); // HH:mm:ss
+    const timeStr = t.timestamp.toISOString().split('T')[1].substring(0, 8);
     const displayId = t.bugId ? `Bug #${t.bugId}` : `Ticket #${t.id}`;
     const url = `https://app.gleap.io/projects/${PROJECT_ID}/inquiries/${t.id}`;
 
@@ -781,40 +754,43 @@ async function fetchData() {
 }
 
 async function fetchAndRenderArchived() {
-  const selection = dom.archivedWindow.value;
-  let minutes = 0;
-  let customStart = null;
-  let customEnd = null;
+  const customStartIST = dom.archivedStart.value;
+  const customEndIST = dom.archivedEnd.value;
 
-  // Handle Custom Range Visibility
-  if (selection === "custom") {
-    dom.archivedCustomRange.classList.remove("hidden");
-    // Don't fetch yet, wait for "Go" button
+  if (!customStartIST || !customEndIST) {
+    showError("Please select start and end times");
     return;
-  } else {
-    dom.archivedCustomRange.classList.add("hidden");
-    minutes = Number(selection);
   }
 
-  // If triggered by "Go" button for custom range
-  if (selection === "custom" && dom.archivedStart.value && dom.archivedEnd.value) {
-    customStart = dom.archivedStart.value;
-    customEnd = dom.archivedEnd.value;
-  }
+  // Convert IST inputs to UTC for API
+  const tableStartUtc = istToUtcIso(customStartIST);
+  const tableEndUtc = istToUtcIso(customEndIST);
 
   setLoading(true);
 
   try {
-    // Fetch both archived and done tickets in parallel
+    // 1. TABLE: Fetch tickets for custom range
     const [archivedTickets, doneTickets] = await Promise.all([
-      fetchArchivedTickets(minutes, customStart, customEnd),
-      fetchDoneTickets(minutes, customStart, customEnd)
+      fetchArchivedTickets(tableStartUtc, tableEndUtc),
+      fetchDoneTickets(tableStartUtc, tableEndUtc)
     ]);
 
-    const { agentMap, hourlyMap } = processArchivedTickets(archivedTickets, doneTickets, minutes, customStart, customEnd);
-
+    const allTickets = [...archivedTickets, ...doneTickets];
+    const { agentMap } = processArchivedTickets(allTickets, tableStartUtc, tableEndUtc);
     renderArchivedTable(agentMap);
+
+    // 2. MATRIX: Fetch tickets for LAST 24 HOURS (Independent)
+    const { startUtc, endUtc } = getLast24HoursUtc();
+
+    const [matrix24Archived, matrix24Done] = await Promise.all([
+      fetchArchivedTickets(startUtc, endUtc),
+      fetchDoneTickets(startUtc, endUtc)
+    ]);
+
+    const matrixTickets = [...matrix24Archived, ...matrix24Done];
+    const { hourlyMap } = processArchivedTickets(matrixTickets, startUtc, endUtc);
     renderHourlyBreakdown(hourlyMap);
+
   } catch (err) {
     showError(err.message || "Failed to load archived tickets");
     console.error(err);
@@ -843,10 +819,6 @@ function switchView(view) {
     renderShifts();
   } else if (view === "archived") {
     dom.archivedView.classList.remove("hidden");
-    // Only fetch if not custom, or if custom data is ready
-    if (dom.archivedWindow.value !== "custom") {
-      fetchAndRenderArchived();
-    }
   }
 }
 
@@ -857,7 +829,7 @@ function startAutoRefresh() {
   if (dom.autoRefresh.checked && lastRange) {
     autoRefreshTimer = setInterval(() => {
       fetchData();
-      if (currentView === "archived" && dom.archivedWindow.value !== "custom") {
+      if (currentView === "archived") {
         fetchAndRenderArchived();
       }
     }, AUTO_REFRESH_MS);
@@ -871,6 +843,14 @@ function handleQuickRange(hours) {
   const startUtc = new Date(endUtc.getTime() - hours * 60 * 60 * 1000);
   setInputsForRange(startUtc, endUtc);
   fetchData();
+}
+
+function handleArchivedQuickRange(hours) {
+  const end = new Date();
+  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
+  dom.archivedStart.value = toInputValue(start);
+  dom.archivedEnd.value = toInputValue(end);
+  fetchAndRenderArchived();
 }
 
 function exportToCsv() {
@@ -903,51 +883,40 @@ function exportToCsv() {
   URL.revokeObjectURL(url);
 }
 
-// === INITIALIZATION ===
-
 function init() {
   // Event listeners
   dom.fetchBtn.addEventListener("click", fetchData);
-  dom.agentSearch.addEventListener("input", renderTable);
+  dom.archivedFetchBtn.addEventListener("click", fetchAndRenderArchived);
+  dom.autoRefresh.addEventListener("change", startAutoRefresh);
   dom.exportBtn.addEventListener("click", exportToCsv);
-  dom.autoRefresh.addEventListener("change", () => startAutoRefresh());
-  dom.archivedWindow.addEventListener("change", fetchAndRenderArchived);
-  dom.archivedFetchBtn.addEventListener("click", () => {
-    // Force fetch for custom range
-    if (dom.archivedWindow.value === "custom") {
-      fetchAndRenderArchived();
-    }
-  });
+  dom.agentSearch.addEventListener("input", renderTable);
+  dom.archivedSearch.addEventListener("input", () => renderArchivedTable(archivedAgentMap));
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => switchView(btn.dataset.view));
+    btn.addEventListener("click", (e) => switchView(e.target.dataset.view));
   });
 
   document.querySelectorAll(".quick-actions button").forEach(btn => {
-    btn.addEventListener("click", () => handleQuickRange(Number(btn.dataset.hours)));
+    if (btn.dataset.hours) {
+      btn.addEventListener("click", () => handleQuickRange(Number(btn.dataset.hours)));
+    } else if (btn.dataset.archivedHours) {
+      btn.addEventListener("click", () => handleArchivedQuickRange(Number(btn.dataset.archivedHours)));
+    }
   });
 
-  document.querySelectorAll("th.sortable").forEach(th => {
-    th.addEventListener("click", () => {
-      const key = th.getAttribute("data-sort");
-      if (!key) return;
-      if (sortKey === key) {
-        sortDir = sortDir === "asc" ? "desc" : "asc";
-      } else {
-        sortKey = key;
-        sortDir = "desc";
-      }
-      renderTable();
-    });
-  });
-
-  // Set default time range (current hour)
+  // Set default main range
   const now = new Date();
   const start = new Date(now);
   start.setMinutes(0, 0, 0);
   const end = new Date(start);
   end.setHours(end.getHours() + 1);
   setInputsForRange(start, end);
+
+  // Set default archived range (Last 1 hour)
+  const archNow = new Date();
+  const archStart = new Date(archNow.getTime() - 1 * 60 * 60 * 1000);
+  dom.archivedStart.value = toInputValue(archStart);
+  dom.archivedEnd.value = toInputValue(archNow);
 
   // Initial fetch
   fetchData();
