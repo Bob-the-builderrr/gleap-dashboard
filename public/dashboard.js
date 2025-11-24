@@ -230,6 +230,19 @@ async function fetchArchivedTickets(minutes, customStart, customEnd) {
   return data.tickets || [];
 }
 
+async function fetchDoneTickets(minutes, customStart, customEnd) {
+  let limit = 200;
+  if (minutes >= 480 || customStart) limit = 1000;
+  else if (minutes >= 120) limit = 500;
+
+  const url = `https://dashapi.gleap.io/v3/tickets?type=INQUIRY&status=DONE&skip=0&limit=${limit}&filter={}&sort=-lastNotification`;
+  const res = await fetch(url, { headers: GLEAP_HEADERS });
+
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const data = await res.json();
+  return data.tickets || [];
+}
+
 function formatDuration(rawValue) {
   const seconds = Number(rawValue);
   if (!Number.isFinite(seconds) || seconds <= 0) return "--";
@@ -432,7 +445,21 @@ function processArchivedTickets(tickets, minutes, customStart, customEnd) {
   const hourlyMap = new Map();
 
   tickets.forEach(ticket => {
-    if (!ticket.archived || !ticket.archivedAt) return;
+    // Determine type and timestamp
+    let type = "Archived";
+    let timestampUTC = null;
+
+    if (ticket.archived && ticket.archivedAt) {
+      type = "Archived";
+      timestampUTC = new Date(ticket.archivedAt);
+    } else if (ticket.status === "DONE" && ticket.updatedAt) {
+      type = "Done";
+      timestampUTC = new Date(ticket.updatedAt);
+    } else {
+      return; // Skip invalid tickets
+    }
+
+    if (!timestampUTC || isNaN(timestampUTC.getTime())) return;
 
     const user = ticket.processingUser || {};
     const agentId = user.id || "unknown";
@@ -441,19 +468,17 @@ function processArchivedTickets(tickets, minutes, customStart, customEnd) {
     const profileImage = user.profileImageUrl || "";
     const lastSeen = user.lastSeen || null;
 
-    const archivedUTC = new Date(ticket.archivedAt);
-    if (isNaN(archivedUTC.getTime())) return;
-
-    const archivedIST = new Date(archivedUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+    const timestampIST = new Date(timestampUTC.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 
     // Store full ticket details
     const ticketDetails = {
       id: ticket.id,
       bugId: ticket.bugId,
-      archivedAt: archivedIST
+      timestamp: timestampIST,
+      type: type
     };
 
-    if (archivedIST >= windowStartIST && archivedIST <= windowEndIST) {
+    if (timestampIST >= windowStartIST && timestampIST <= windowEndIST) {
       if (!agentMap.has(agentId)) {
         agentMap.set(agentId, {
           id: agentId,
@@ -463,19 +488,19 @@ function processArchivedTickets(tickets, minutes, customStart, customEnd) {
           lastSeen,
           tickets: [],
           ticketDetails: [], // Store full details
-          latestArchived: archivedIST
+          latestTimestamp: timestampIST
         });
       }
 
       const agentData = agentMap.get(agentId);
-      agentData.tickets.push(archivedIST);
+      agentData.tickets.push(timestampIST);
       agentData.ticketDetails.push(ticketDetails);
 
-      if (archivedIST > agentData.latestArchived) {
-        agentData.latestArchived = archivedIST;
+      if (timestampIST > agentData.latestTimestamp) {
+        agentData.latestTimestamp = timestampIST;
       }
 
-      const hour = archivedIST.getUTCHours();
+      const hour = timestampIST.getUTCHours();
       const hourKey = `h${hour}`;
 
       if (!hourlyMap.has(hourKey)) {
@@ -511,7 +536,7 @@ function renderArchivedTable(agentMap) {
     profileImage: agent.profileImage,
     lastSeen: agent.lastSeen,
     count: agent.tickets.length,
-    latestArchived: agent.latestArchived
+    latestTimestamp: agent.latestTimestamp
   }));
 
   rows.sort((a, b) => b.count - a.count);
@@ -522,8 +547,8 @@ function renderArchivedTable(agentMap) {
   }
 
   rows.forEach(r => {
-    const archivedDate = r.latestArchived.toISOString().split('T')[0];
-    const archivedTime = r.latestArchived.toISOString().split('T')[1].substring(0, 5);
+    const archivedDate = r.latestTimestamp.toISOString().split('T')[0];
+    const archivedTime = r.latestTimestamp.toISOString().split('T')[1].substring(0, 5);
 
     let lastSeenTime = "--";
     if (r.lastSeen) {
@@ -646,17 +671,21 @@ window.showTicketModal = function (agentId) {
   dom.modalContent.innerHTML = "";
 
   // Sort tickets by time (newest first)
-  const tickets = [...agent.ticketDetails].sort((a, b) => b.archivedAt - a.archivedAt);
+  const tickets = [...agent.ticketDetails].sort((a, b) => b.timestamp - a.timestamp);
 
   tickets.forEach(t => {
-    const timeStr = t.archivedAt.toISOString().split('T')[1].substring(0, 8); // HH:mm:ss
+    const timeStr = t.timestamp.toISOString().split('T')[1].substring(0, 8); // HH:mm:ss
     const displayId = t.bugId ? `Bug #${t.bugId}` : `Ticket #${t.id}`;
     const url = `https://app.gleap.io/projects/${PROJECT_ID}/inquiries/${t.id}`;
+    const typeClass = t.type === "Done" ? "success" : "warning";
 
     const div = document.createElement("div");
     div.className = "ticket-list-item";
     div.innerHTML = `
-      <a href="${url}" target="_blank">${displayId}</a>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <a href="${url}" target="_blank">${displayId}</a>
+        <span class="chip rating ${t.type === 'Done' ? 'good' : 'time'}" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">${t.type}</span>
+      </div>
       <span class="ticket-time">${timeStr} (IST)</span>
     `;
     dom.modalContent.appendChild(div);
@@ -727,8 +756,15 @@ async function fetchAndRenderArchived() {
   setLoading(true);
 
   try {
-    const tickets = await fetchArchivedTickets(minutes, customStart, customEnd);
-    const { agentMap, hourlyMap } = processArchivedTickets(tickets, minutes, customStart, customEnd);
+    const [archivedTickets, doneTickets] = await Promise.all([
+      fetchArchivedTickets(minutes, customStart, customEnd),
+      fetchDoneTickets(minutes, customStart, customEnd)
+    ]);
+
+    // Merge tickets
+    const allTickets = [...archivedTickets, ...doneTickets];
+
+    const { agentMap, hourlyMap } = processArchivedTickets(allTickets, minutes, customStart, customEnd);
 
     renderArchivedTable(agentMap);
     renderHourlyBreakdown(hourlyMap);
